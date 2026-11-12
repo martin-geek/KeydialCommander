@@ -2,7 +2,7 @@
 
 # Keydial Commander
 
-### Your Huion Keydial Mini. Your shortcuts. On Linux.
+### Your Huion Keydial Mini. Your shortcuts.
 
 Turn the K20's 18 buttons and dial into a visual control surface for shortcuts,
 macros, programs and profiles.
@@ -11,13 +11,17 @@ macros, programs and profiles.
 &nbsp; · &nbsp;
 [Installation guide](docs/INSTALL.md)
 &nbsp; · &nbsp;
+[**Download macOS DMG**](https://github.com/martin-geek/KeydialCommander/releases/download/v1.3.1-macos/Keydial.Commander-1.3.1-macOS-arm64.dmg)
+&nbsp; · &nbsp;
+[macOS installation and user guide](https://github.com/martin-geek/KeydialCommander/blob/codex/macos-port/docs/INSTALL-MACOS.md)
+&nbsp; · &nbsp;
 [Roadmap](docs/ROADMAP.md)
 &nbsp; · &nbsp;
 [Report a problem](https://github.com/the3dcoder/KeydialCommander/issues)
 
 [![Latest preview](https://img.shields.io/github/v/release/the3dcoder/KeydialCommander?include_prereleases&label=preview&color=2dd4a7)](https://github.com/the3dcoder/KeydialCommander/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2dd4a7)](LICENSE)
-![Platform: Linux](https://img.shields.io/badge/platform-Linux-333)
+![Platforms: Linux and macOS preview](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20preview-333)
 
 ![Keydial Commander showing the K20 layout and binding editor](docs/screenshots/hero.png)
 
