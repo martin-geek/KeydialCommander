@@ -23,20 +23,23 @@ class DriverManager:
         self.config = config
         self.open_editor = open_editor
         self.device: Optional[HuionKeydialMini] = None
-        self._shutdown = asyncio.Event()
 
     async def start(self):
         """Start the driver."""
         logger.info("Starting Huion Keydial Mini driver...")
+
+        loop = asyncio.get_running_loop()
+        shutdown = asyncio.Event()
+        signals = []
 
         try:
             # Initialize the device
             self.device = HuionKeydialMini(self.config)
 
             # Set up signal handlers
-            loop = asyncio.get_event_loop()
-            for sig in [signal.SIGINT, signal.SIGTERM]:
-                loop.add_signal_handler(sig, self._signal_handler)
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                loop.add_signal_handler(sig, shutdown.set)
+                signals.append(sig)
 
             # Start the device
             await self.device.start()
@@ -47,18 +50,18 @@ class DriverManager:
                 loop.run_in_executor(None, webbrowser.open, url)
 
             # Wait until a shutdown signal arrives (no polling)
-            await self._shutdown.wait()
+            await shutdown.wait()
+            logger.info("Shutdown signal received")
 
         except Exception as e:
             logger.error(f"Failed to start driver: {e}")
             raise
         finally:
-            await self.stop()
-
-    def _signal_handler(self):
-        """Handle shutdown signals."""
-        logger.info("Shutdown signal received")
-        self._shutdown.set()
+            try:
+                await self.stop()
+            finally:
+                for sig in signals:
+                    loop.remove_signal_handler(sig)
 
     async def stop(self):
         """Stop the driver."""
