@@ -1,15 +1,9 @@
-"""Main device driver for the Huion Keydial Mini (evdev-grab architecture).
-
-The K20 is a standard HID keyboard (see docs/DEVICE-K20.md): input arrives on
-the kernel evdev nodes, not over BLE. This driver grabs those nodes, maps the
-fixed firmware keys to action IDs, applies the user's bindings, and re-emits
-via uinput. The control plane (profiles, socket, events, uinput) is unchanged.
-"""
+"""Connect the platform input and output backends to the Commander engine."""
 import logging
-from typing import Optional
+import sys
 
 from .config import Config
-from .uinput_handler import UInputHandler, OutputUnavailable
+from .key_output import OutputUnavailable
 from .keybind_manager import KeybindManager
 from .event_bus import EventBus
 from .profile_store import ProfileStore
@@ -23,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class HuionKeydialMini:
-    """Main driver class: evdev source -> translator -> uinput + event bus."""
+    """Translate K20 input and execute actions through the host backend."""
 
     def __init__(self, config: Config):
         self.config = config
@@ -37,22 +31,27 @@ class HuionKeydialMini:
         self.profile_store.ensure_initialized(legacy_config=config)
         self.keybind_manager = KeybindManager(config, profile_store=self.profile_store,
                                               event_bus=self.event_bus)
-        self.uinput_handler = UInputHandler(config, self.keybind_manager)
-
-        # Action execution
-        self.action_engine = ActionEngine(self.keybind_manager, self.uinput_handler)
-
-        # Input plane (evdev)
         self.translator = InputTranslator(self.keybind_manager)
-        # Imported lazily so unit tests can patch EvdevSource before construction
-        from .evdev_source import EvdevSource
-        self.evdev_source = EvdevSource(
-            on_event=self._dispatch,
-            translator=self.translator,
-            on_state=self._on_state,
-            # never grab our own uinput output device (its name also has "keydial")
-            exclude_names={self.uinput_handler.config.uinput_device_name},
-        )
+        if sys.platform == 'darwin':
+            from .macos import MacInputSource, MacKeyOutput
+            self.uinput_handler = MacKeyOutput(config, self.keybind_manager)
+            self.evdev_source = MacInputSource(
+                on_event=self._dispatch,
+                translator=self.translator,
+                on_state=self._on_state,
+                output_available=lambda: self.uinput_handler.available,
+            )
+        else:
+            from .evdev_source import EvdevSource
+            from .uinput_handler import UInputHandler
+            self.uinput_handler = UInputHandler(config, self.keybind_manager)
+            self.evdev_source = EvdevSource(
+                on_event=self._dispatch,
+                translator=self.translator,
+                on_state=self._on_state,
+                exclude_names={self.uinput_handler.config.uinput_device_name},
+            )
+        self.action_engine = ActionEngine(self.keybind_manager, self.uinput_handler)
 
         # Commander API (embedded aiohttp server)
         from .api_server import ApiServer
@@ -76,7 +75,7 @@ class HuionKeydialMini:
         self.api_server.runtime_status = self._runtime_status
 
     def _admit_action(self, preview):
-        if self._stopping or self.uinput_handler.failed or self.uinput_handler.device is None:
+        if self._stopping or not self.uinput_handler.available:
             return False
         return (self.evdev_source.preview_allowed if preview else self.evdev_source.ready)
 
@@ -93,7 +92,7 @@ class HuionKeydialMini:
     def _runtime_status(self):
         return {
             'device': {'ready': self.evdev_source.ready, 'state': self.evdev_source.state},
-            'output': {'available': self.uinput_handler.device is not None and not self.uinput_handler.failed,
+            'output': {'available': self.uinput_handler.available,
                        'cleanup_confirmed': self.uinput_handler.cleanup_confirmed},
             'actions': {'busy_count': self.action_engine.busy_count},
         }
@@ -103,7 +102,7 @@ class HuionKeydialMini:
                                 'battery': None, **self._runtime_status()['device']})
 
     async def start(self):
-        """Start the driver: socket server, uinput device, and evdev grab."""
+        """Start the driver: socket server, platform backends, and web API."""
         logger.info("Starting Huion Keydial Mini driver...")
         try:
             await self.keybind_manager.start_socket_server()
@@ -111,7 +110,7 @@ class HuionKeydialMini:
             await self.evdev_source.start()
             await self.api_server.start()
             self.running = True
-            logger.info("Driver started successfully - grabbing device input")
+            logger.info("Commander service started")
         except Exception as e:
             logger.error(f"Failed to start driver: {e}")
             await self.stop()

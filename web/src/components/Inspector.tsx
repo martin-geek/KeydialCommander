@@ -3,12 +3,13 @@ import { useStatus, useBindings, useProfiles, usePutBinding, useDeleteBinding } 
 import { api } from '../api/client'
 import { useUI } from '../store'
 import { ShortcutCapture } from './ShortcutCapture'
+import { isMac, urlOpener } from '../platform'
 import type { Action, ActionType, MacroStep } from '../api/types'
 
 const DEFAULTS: Record<ActionType, Action> = {
   keystroke: { type: 'keystroke', keys: [], sticky: false },
   macro: { type: 'macro', steps: [{ keys: [] }] },
-  command: { type: 'command', argv: ['xdg-open', ''] },
+  command: { type: 'command', argv: [urlOpener, ''] },
   profile_switch: { type: 'profile_switch', profile: 'next' },
 }
 
@@ -172,13 +173,14 @@ function CommandEditor({ argv, onChange }: { argv: string[]; onChange: (a: strin
       {argv.map((a, i) => (
         <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
           <input className="input" value={a} onChange={(e) => set(i, e.target.value)}
-                 placeholder={i === 0 ? 'program (e.g. xdg-open)' : 'argument'} />
+                 placeholder={i === 0 ? `program (e.g. ${urlOpener})` : 'argument'} />
           <button className="linkbtn" onClick={() => onChange(argv.filter((_, j) => j !== i))}>✕</button>
         </div>
       ))}
       <button className="btn" onClick={() => onChange([...argv, ''])}>+ Argument</button>
       <p className="muted" style={{ fontSize: 11.5, marginTop: 6 }}>
-        Runs directly (no shell). For a URL: <code>xdg-open</code> then the address.
+        For a URL, use <code>{urlOpener}</code> with the address as its argument.
+        {isMac && <> To launch an app, use <code>-a</code> followed by its name.</>}
       </p>
     </div>
   )

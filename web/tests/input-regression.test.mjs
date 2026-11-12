@@ -215,7 +215,9 @@ test('dropping an unfinished template stages a draft without sending it', async 
   await until(() => evaluate('document.querySelector(".insp h3")?.textContent.includes("BUTTON_2")'), 'drop selection')
   assert.deepEqual(await evaluate('window.__api.writes'), [])
   assert.equal(await evaluate('document.querySelector(".insp select").value'), 'command')
-  assert.equal(await evaluate('document.querySelector(".insp input").value'), '')
+  const appArgs = /Macintosh/.test(await evaluate('navigator.userAgent'))
+    ? ['/usr/bin/open', '-a', ''] : ['']
+  assert.deepEqual(await evaluate('[...document.querySelectorAll(".insp input")].map(input => input.value)'), appArgs)
 })
 
 test('clicking a template edits the selected control and only Save writes the configured draft', async () => {
@@ -233,7 +235,9 @@ test('clicking a different library template replaces the current unsaved draft',
   await reset()
   await click(await card('Launch app'))
   await until(() => evaluate('document.querySelector(".insp select").value === "command"'), 'clicked command draft')
-  assert.equal(await evaluate('document.querySelector(".insp input").value'), '')
+  const appArgs = /Macintosh/.test(await evaluate('navigator.userAgent'))
+    ? ['/usr/bin/open', '-a', ''] : ['']
+  assert.deepEqual(await evaluate('[...document.querySelectorAll(".insp input")].map(input => input.value)'), appArgs)
   await click(await card('Macro'))
   await until(() => evaluate('document.querySelector(".insp select").value === "macro"'), 'clicked macro draft')
   assert.deepEqual(await evaluate('window.__api.writes'), [])

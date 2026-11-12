@@ -38,14 +38,14 @@ def normalize_action_id(action_id: str) -> str:
     raise ValidationError("Invalid action ID: %r" % action_id)
 
 
-def validate_keys(keys: List[str]) -> List[str]:
-    """Return stripped key names, all present in KEY_MAPPING, or raise."""
+def validate_keys(keys: List[str], *, known_keys=KEY_MAPPING) -> List[str]:
+    """Return stripped key names and reject unknown names."""
     if not keys:
         raise ValidationError("At least one key required")
     cleaned = []
     for key in keys:
         name = key.strip()
-        if name not in KEY_MAPPING:
+        if name not in known_keys:
             raise ValidationError("Unknown key name: %r (see keydialctl list-keys)" % name)
         cleaned.append(name)
     return cleaned
@@ -63,7 +63,7 @@ MACRO_MAX_TOTAL_MS = 10000
 _ACTION_ALIASES = {"keyboard": "keystroke"}
 
 
-def validate_action(data):
+def validate_action(data, *, known_keys=KEY_MAPPING):
     """Validate a binding action dict and return it normalized, or raise."""
     if not isinstance(data, dict):
         raise ValidationError("Action must be an object")
@@ -71,7 +71,7 @@ def validate_action(data):
                                 str(data.get("type", "keystroke")))
 
     if atype == "keystroke":
-        keys = validate_keys(data.get("keys") or [])
+        keys = validate_keys(data.get("keys") or [], known_keys=known_keys)
         out = {"type": "keystroke", "keys": keys}
         if data.get("sticky"):
             out["sticky"] = True
@@ -98,7 +98,7 @@ def validate_action(data):
                 total_ms += ms
                 norm_steps.append({"delay_ms": ms})
             elif "keys" in step:
-                norm_steps.append({"keys": validate_keys(step.get("keys") or [])})
+                norm_steps.append({"keys": validate_keys(step.get("keys") or [], known_keys=known_keys)})
             else:
                 raise ValidationError("Macro step needs 'keys' or 'delay_ms'")
         if total_ms > MACRO_MAX_TOTAL_MS:

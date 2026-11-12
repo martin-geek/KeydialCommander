@@ -4,6 +4,7 @@ import asyncio
 import logging
 import signal
 import sys
+import webbrowser
 from typing import Optional
 
 import click
@@ -18,8 +19,9 @@ logger = logging.getLogger(__name__)
 class DriverManager:
     """Manages the driver lifecycle."""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, open_editor=False):
         self.config = config
+        self.open_editor = open_editor
         self.device: Optional[HuionKeydialMini] = None
         self._shutdown = asyncio.Event()
 
@@ -39,7 +41,10 @@ class DriverManager:
             # Start the device
             await self.device.start()
 
-            logger.info("Driver started successfully")
+            url = f"http://127.0.0.1:{self.device.api_server.bound_port}"
+            logger.info("Keydial Commander editor: %s", url)
+            if self.open_editor:
+                loop.run_in_executor(None, webbrowser.open, url)
 
             # Wait until a shutdown signal arrives (no polling)
             await self._shutdown.wait()
@@ -76,7 +81,8 @@ class DriverManager:
               type=click.Choice(['DEBUG', 'INFO', 'WARNING', 'ERROR']),
               default='INFO',
               help='Set the logging level')
-def main(config: Optional[str], device_address: Optional[str], log_level: str):
+@click.option('--open', 'open_editor', is_flag=True, help='Open the editor in your default browser')
+def main(config: Optional[str], device_address: Optional[str], log_level: str, open_editor: bool):
     """Huion Keydial Mini driver main entry point."""
 
     # Set up logging
@@ -90,7 +96,7 @@ def main(config: Optional[str], device_address: Optional[str], log_level: str):
         app_config = Config.load(config, device_address)
 
         # Start the driver
-        manager = DriverManager(app_config)
+        manager = DriverManager(app_config, open_editor=open_editor)
         asyncio.run(manager.start())
 
     except KeyboardInterrupt:

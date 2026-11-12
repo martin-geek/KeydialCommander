@@ -1,0 +1,42 @@
+"""Shared profile key names mapped to macOS virtual key codes."""
+
+KEY_MAPPING = {
+    # kVK_ANSI_* and the special keys in HIToolbox/Events.h.
+    "KEY_A": 0x00, "KEY_B": 0x0B, "KEY_C": 0x08, "KEY_D": 0x02,
+    "KEY_E": 0x0E, "KEY_F": 0x03, "KEY_G": 0x05, "KEY_H": 0x04,
+    "KEY_I": 0x22, "KEY_J": 0x26, "KEY_K": 0x28, "KEY_L": 0x25,
+    "KEY_M": 0x2E, "KEY_N": 0x2D, "KEY_O": 0x1F, "KEY_P": 0x23,
+    "KEY_Q": 0x0C, "KEY_R": 0x0F, "KEY_S": 0x01, "KEY_T": 0x11,
+    "KEY_U": 0x20, "KEY_V": 0x09, "KEY_W": 0x0D, "KEY_X": 0x07,
+    "KEY_Y": 0x10, "KEY_Z": 0x06,
+    "KEY_0": 0x1D, "KEY_1": 0x12, "KEY_2": 0x13, "KEY_3": 0x14,
+    "KEY_4": 0x15, "KEY_5": 0x17, "KEY_6": 0x16, "KEY_7": 0x1A,
+    "KEY_8": 0x1C, "KEY_9": 0x19,
+    "KEY_ENTER": 0x24, "KEY_TAB": 0x30, "KEY_SPACE": 0x31,
+    "KEY_BACKSPACE": 0x33, "KEY_ESC": 0x35, "KEY_DELETE": 0x75,
+    "KEY_LEFTMETA": 0x37, "KEY_RIGHTMETA": 0x36, "KEY_LEFTSHIFT": 0x38,
+    "KEY_RIGHTSHIFT": 0x3C, "KEY_LEFTCTRL": 0x3B, "KEY_RIGHTCTRL": 0x3E,
+    "KEY_LEFTALT": 0x3A, "KEY_RIGHTALT": 0x3D, "KEY_CAPSLOCK": 0x39,
+    "KEY_MINUS": 0x1B, "KEY_EQUAL": 0x18, "KEY_LEFTBRACE": 0x21,
+    "KEY_RIGHTBRACE": 0x1E, "KEY_BACKSLASH": 0x2A, "KEY_SEMICOLON": 0x29,
+    "KEY_APOSTROPHE": 0x27, "KEY_COMMA": 0x2B, "KEY_DOT": 0x2F,
+    "KEY_SLASH": 0x2C, "KEY_GRAVE": 0x32, "KEY_102ND": 0x0A,
+    "KEY_LEFT": 0x7B, "KEY_RIGHT": 0x7C, "KEY_DOWN": 0x7D, "KEY_UP": 0x7E,
+    "KEY_HOME": 0x73, "KEY_END": 0x77, "KEY_PAGEUP": 0x74, "KEY_PAGEDOWN": 0x79,
+    "KEY_INSERT": 0x72, "KEY_NUMLOCK": 0x47,
+    "KEY_KP0": 0x52, "KEY_KP1": 0x53, "KEY_KP2": 0x54, "KEY_KP3": 0x55,
+    "KEY_KP4": 0x56, "KEY_KP5": 0x57, "KEY_KP6": 0x58, "KEY_KP7": 0x59,
+    "KEY_KP8": 0x5B, "KEY_KP9": 0x5C, "KEY_KPDOT": 0x41, "KEY_KPENTER": 0x4C,
+    "KEY_KPPLUS": 0x45, "KEY_KPMINUS": 0x4E, "KEY_KPASTERISK": 0x43,
+    "KEY_KPSLASH": 0x4B, "KEY_KPEQUAL": 0x51,
+    # 0x100 + NX_KEYTYPE_* designates a system-defined media event.
+    "KEY_VOLUMEUP": 0x100, "KEY_VOLUMEDOWN": 0x101, "KEY_MUTE": 0x107,
+    "KEY_BRIGHTNESSUP": 0x102, "KEY_BRIGHTNESSDOWN": 0x103,
+    "KEY_PLAYPAUSE": 0x110, "KEY_NEXTSONG": 0x111, "KEY_PREVIOUSSONG": 0x112,
+}
+KEY_MAPPING.update({
+    f"KEY_F{number}": code for number, code in enumerate((
+        0x7A, 0x78, 0x63, 0x76, 0x60, 0x61, 0x62, 0x64, 0x65, 0x6D,
+        0x67, 0x6F, 0x69, 0x6B, 0x71, 0x6A, 0x40, 0x4F, 0x50, 0x5A,
+    ), 1)
+})

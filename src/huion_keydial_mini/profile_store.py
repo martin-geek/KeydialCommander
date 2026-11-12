@@ -13,6 +13,7 @@ from typing import Dict, List, Optional
 from ruamel.yaml import YAML
 
 from .keybind_manager import KeybindAction, EventType
+from .keymap import PROFILE_KEYS
 from .validation import normalize_action_id, validate_keys, ValidationError
 
 logger = logging.getLogger(__name__)
@@ -53,7 +54,7 @@ class ProfileStore:
             for action_id, keydata in mapping.items():
                 try:
                     aid = normalize_action_id(action_id)
-                    keys = validate_keys([k.strip() for k in keydata.split("+")])
+                    keys = validate_keys(keydata.split("+"), known_keys=PROFILE_KEYS)
                 except ValidationError as e:
                     logger.warning("Skipping legacy binding %r: %s", action_id, e)
                     continue
@@ -63,7 +64,7 @@ class ProfileStore:
             value = dial.get(dial_id)
             if value:
                 try:
-                    keys = validate_keys([k.strip() for k in str(value).split("+")])
+                    keys = validate_keys(str(value).split("+"), known_keys=PROFILE_KEYS)
                 except ValidationError as e:
                     logger.warning("Skipping legacy dial binding %r: %s", dial_id, e)
                     continue
@@ -156,7 +157,7 @@ class ProfileStore:
         for aid, raw in (doc.get("bindings") or {}).items():
             try:
                 canonical = normalize_action_id(str(aid))
-                validate_action(dict(raw))
+                validate_action(dict(raw), known_keys=PROFILE_KEYS)
             except (ValidationError, Exception) as e:
                 logger.warning("Import: skipping binding %r: %s", aid, e)
                 continue

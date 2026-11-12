@@ -286,7 +286,7 @@ class ApiServer:
         except ValidationError as e:
             return json_error(str(e))
         from .action_engine import ActionRejected
-        from .uinput_handler import OutputUnavailable
+        from .key_output import OutputUnavailable
         if self.action_engine is None:
             return json_error("Output unavailable", code="unavailable", status=503)
         try:
@@ -359,7 +359,7 @@ class ApiServer:
         await self._runner.setup()
         site = web.TCPSite(self._runner, self.host, self.port)
         await site.start()
-        self.bound_port = self.port
+        self.bound_port = self._runner.addresses[0][1]
         try:
             (ipc.runtime_dir() / "port").write_text(str(self.bound_port))
         except Exception as e:

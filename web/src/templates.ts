@@ -1,4 +1,5 @@
 import type { Action } from './api/types'
+import { isMac, urlOpener } from './platform'
 
 export interface Template {
   id: string
@@ -16,9 +17,9 @@ export const TEMPLATES: Template[] = [
     make: () => ({ type: 'macro', steps: [{ keys: [] }] }) },
   // System
   { id: 'launch', label: 'Launch app', icon: '🚀', group: 'System',
-    make: () => ({ type: 'command', argv: [''] }) },
+    make: () => ({ type: 'command', argv: isMac ? [urlOpener, '-a', ''] : [''] }) },
   { id: 'url', label: 'Open URL', icon: '🌐', group: 'System',
-    make: () => ({ type: 'command', argv: ['xdg-open', ''] }) },
+    make: () => ({ type: 'command', argv: [urlOpener, ''] }) },
   { id: 'command', label: 'Run command', icon: '$', group: 'System',
     make: () => ({ type: 'command', argv: [''] }) },
   // Media
