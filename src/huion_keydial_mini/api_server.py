@@ -3,6 +3,7 @@
 Binds 127.0.0.1 only. Reuses ProfileStore/KeybindManager for all mutations
 (no duplicate logic) and relays EventBus events over a WebSocket.
 """
+import hmac
 import logging
 import weakref
 from pathlib import Path
@@ -11,7 +12,7 @@ from urllib.parse import urlsplit
 from aiohttp import web, WSCloseCode
 
 from . import ipc
-from .keymap import SUPPORTED_KEYS
+from .keymap import KEY_MAPPING, SUPPORTED_KEYS
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,7 @@ async def local_requests_only(request, handler):
 
 class ApiServer:
     def __init__(self, keybind_manager, profile_store, event_bus, action_engine,
-                 version, host="127.0.0.1", port=8137):
+                 version, host="127.0.0.1", port=8137, native_token=None):
         self.keybind_manager = keybind_manager
         self.profile_store = profile_store
         self.event_bus = event_bus
@@ -101,6 +102,7 @@ class ApiServer:
         self.version = version
         self.host = host
         self.port = port
+        self.native_token = native_token
         self.device_connected = False
         self.bound_port = None
         self.runtime_status = None
@@ -112,18 +114,29 @@ class ApiServer:
 
     # -- routing ------------------------------------------------------------
     def _build_app(self):
-        app = web.Application(middlewares=[local_requests_only])
+        middlewares = [local_requests_only]
+        if self.native_token is not None:
+            middlewares.append(self._require_native_token)
+        app = web.Application(middlewares=middlewares)
         app["websockets"] = weakref.WeakSet()   # open /api/events sockets
         app.on_shutdown.append(self._on_shutdown)
         r = app.router
         r.add_get("/api/status", self._status)
         r.add_get("/api/keys", self._keys)
         self._add_routes(r)                     # extended in later tasks
-        r.add_get("/", self._index)
-        if (DIST_DIR / "assets").is_dir():      # serve built JS/CSS
-            r.add_static("/assets", DIST_DIR / "assets")
-        r.add_get("/{tail:.*}", self._spa_fallback)
+        if self.native_token is None:
+            r.add_get("/", self._index)
+            if (DIST_DIR / "assets").is_dir():
+                r.add_static("/assets", DIST_DIR / "assets")
+            r.add_get("/{tail:.*}", self._spa_fallback)
         return app
+
+    @web.middleware
+    async def _require_native_token(self, request, handler):
+        supplied = request.headers.get("Authorization", "").encode("utf-8")
+        if not hmac.compare_digest(supplied, f"Bearer {self.native_token}".encode("ascii")):
+            return json_error("Unauthorized", code="forbidden", status=403)
+        return await handler(request)
 
     async def _on_shutdown(self, app):
         """Close open WebSockets so shutdown doesn't block on connected clients."""
@@ -336,8 +349,11 @@ class ApiServer:
         })
 
     async def _keys(self, request):
-        return web.json_response({"groups": group_keys(SUPPORTED_KEYS),
-                                  "all": list(SUPPORTED_KEYS)})
+        payload = {"groups": group_keys(SUPPORTED_KEYS), "all": list(SUPPORTED_KEYS)}
+        if self.native_token is not None:
+            payload["capture"] = {code: name for name, code in KEY_MAPPING.items()
+                                  if code < 0x100}
+        return web.json_response(payload)
 
     async def _index(self, request):
         return web.FileResponse(_index_file())
@@ -360,10 +376,11 @@ class ApiServer:
         site = web.TCPSite(self._runner, self.host, self.port)
         await site.start()
         self.bound_port = self._runner.addresses[0][1]
-        try:
-            (ipc.runtime_dir() / "port").write_text(str(self.bound_port))
-        except Exception as e:
-            logger.warning("Could not write port file: %s", e)
+        if self.native_token is None:
+            try:
+                (ipc.runtime_dir() / "port").write_text(str(self.bound_port))
+            except OSError as e:
+                logger.warning("Could not write port file: %s", e)
         logger.info("Commander API on http://%s:%d", self.host, self.bound_port)
         return self.bound_port
 
@@ -375,7 +392,8 @@ class ApiServer:
             except (asyncio.TimeoutError, Exception) as e:
                 logger.warning("API cleanup did not finish cleanly: %s", e)
             self._runner = None
-        try:
-            (ipc.runtime_dir() / "port").unlink()
-        except Exception:
-            pass
+        if self.native_token is None:
+            try:
+                (ipc.runtime_dir() / "port").unlink()
+            except OSError:
+                pass

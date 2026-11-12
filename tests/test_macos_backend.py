@@ -113,3 +113,35 @@ async def test_command_a_and_shared_modifier_ownership(monkeypatch, config):
         (0x00, False, False, 0x100008),
         (0x37, False, True, 0),
     ]
+
+
+async def test_native_mode_requires_token_and_keeps_control_ids(monkeypatch, tmp_path, config):
+    from huion_keydial_mini import _macos
+    from huion_keydial_mini.device import HuionKeydialMini
+
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.setattr(_macos, "can_post", lambda: False)
+    driver = HuionKeydialMini(config, native_token="test-native-session")
+    try:
+        await driver.start()
+        async with ClientSession(f"http://127.0.0.1:{driver.api_server.bound_port}") as session:
+            headers = {"Authorization": "Bearer test-native-session"}
+            async with session.get("/api/status") as response:
+                assert response.status == 403
+            async with session.get("/", headers=headers) as response:
+                assert response.status == 404
+            async with session.get("/api/keys", headers=headers) as response:
+                keys = await response.json()
+                assert keys["capture"]["0"] == "KEY_A"
+            path = "/api/profiles/Default/bindings"
+            for control in ("BUTTON_1", "DIAL_CW", "DIAL_CCW"):
+                async with session.put(f"{path}/{control}", headers=headers,
+                                       json={"type": "keystroke", "keys": ["KEY_A"]}) as response:
+                    assert response.status == 200
+            async with session.get(path, headers=headers) as response:
+                assert set((await response.json())["bindings"]) >= {"BUTTON_1", "DIAL_CW", "DIAL_CCW"}
+            async with session.ws_connect("/api/events", headers=headers) as socket:
+                driver.event_bus.publish({"type": "key_event", "action_id": "BUTTON_1", "pressed": True})
+                assert (await asyncio.wait_for(socket.receive_json(), timeout=2))["action_id"] == "BUTTON_1"
+    finally:
+        await driver.stop()

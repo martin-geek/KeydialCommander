@@ -11,7 +11,7 @@ macros, programs and profiles.
 &nbsp; · &nbsp;
 [Linux installation](docs/INSTALL.md)
 &nbsp; · &nbsp;
-[macOS preview](docs/INSTALL-MACOS.md)
+[macOS desktop app](docs/INSTALL-MACOS.md)
 &nbsp; · &nbsp;
 [Roadmap](docs/ROADMAP.md)
 &nbsp; · &nbsp;

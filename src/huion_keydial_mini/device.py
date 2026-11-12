@@ -19,8 +19,9 @@ logger = logging.getLogger(__name__)
 class HuionKeydialMini:
     """Translate K20 input and execute actions through the host backend."""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, *, native_token=None):
         self.config = config
+        self.native_mode = native_token is not None
         self.debug_mode = getattr(config, 'debug_mode', False)
         self.running = False
         self._stopping = False
@@ -61,7 +62,8 @@ class HuionKeydialMini:
             event_bus=self.event_bus,
             action_engine=self.action_engine,
             version=__version__,
-            port=config.api_port,
+            port=0 if self.native_mode else config.api_port,
+            native_token=native_token,
         )
 
         self.evdev_source.on_reset = self._reset_actions
@@ -105,7 +107,8 @@ class HuionKeydialMini:
         """Start the driver: socket server, platform backends, and web API."""
         logger.info("Starting Huion Keydial Mini driver...")
         try:
-            await self.keybind_manager.start_socket_server()
+            if not self.native_mode:
+                await self.keybind_manager.start_socket_server()
             await self.uinput_handler.start()
             await self.evdev_source.start()
             await self.api_server.start()
@@ -126,7 +129,8 @@ class HuionKeydialMini:
         try:
             await self.api_server.stop()
         finally:
-            await self.keybind_manager.stop_socket_server()
+            if not self.native_mode:
+                await self.keybind_manager.stop_socket_server()
 
     async def _dispatch(self, event: InputEvent):
         """Execute a translated action and announce it on the bus."""
