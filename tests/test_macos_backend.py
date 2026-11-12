@@ -118,6 +118,7 @@ async def test_command_a_and_shared_modifier_ownership(monkeypatch, config):
 async def test_native_mode_requires_token_and_keeps_control_ids(monkeypatch, tmp_path, config):
     from huion_keydial_mini import _macos
     from huion_keydial_mini.device import HuionKeydialMini
+    from huion_keydial_mini.input_events import EventType, InputEvent
 
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
     monkeypatch.setattr(_macos, "can_post", lambda: False)
@@ -140,8 +141,22 @@ async def test_native_mode_requires_token_and_keeps_control_ids(monkeypatch, tmp
                     assert response.status == 200
             async with session.get(path, headers=headers) as response:
                 assert set((await response.json())["bindings"]) >= {"BUTTON_1", "DIAL_CW", "DIAL_CCW"}
+            async with session.put(f"{path}/BUTTON_2", headers=headers,
+                                   json={"type": "settings_preview"}) as response:
+                assert response.status == 200
+            async with session.get("/api/profiles/Default/export", headers=headers) as response:
+                exported = await response.text()
+                assert "settings_preview" in exported
+            async with session.post("/api/profiles/import", headers=headers,
+                                    json={"name": "Backup", "yaml": exported}) as response:
+                assert response.status == 200
+            async with session.get("/api/profiles/Backup/bindings", headers=headers) as response:
+                assert (await response.json())["bindings"]["BUTTON_2"]["type"] == "settings_preview"
+
+            driver.action_engine.admission = lambda preview: True
             async with session.ws_connect("/api/events", headers=headers) as socket:
-                driver.event_bus.publish({"type": "key_event", "action_id": "BUTTON_1", "pressed": True})
-                assert (await asyncio.wait_for(socket.receive_json(), timeout=2))["action_id"] == "BUTTON_1"
+                await driver._dispatch(InputEvent(EventType.KEY_PRESS, "BUTTON_2"))
+                assert (await asyncio.wait_for(socket.receive_json(), timeout=2))["type"] == "settings_preview"
+                assert (await asyncio.wait_for(socket.receive_json(), timeout=2))["action_id"] == "BUTTON_2"
     finally:
         await driver.stop()

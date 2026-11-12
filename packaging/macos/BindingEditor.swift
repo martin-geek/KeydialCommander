@@ -17,7 +17,8 @@ struct BindingEditor: View {
     }
 
     private let types = [("keystroke", "Keyboard shortcut"), ("macro", "Macro"),
-                         ("command", "App, URL, or command"), ("profile_switch", "Switch profile")]
+                         ("command", "App, URL, or command"), ("profile_switch", "Switch profile"),
+                         ("settings_preview", "Show Settings Preview")]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -42,6 +43,9 @@ struct BindingEditor: View {
                             Text("Next profile").tag("next")
                             ForEach(model.profiles) { Text($0.name).tag($0.name) }
                         }
+                    case "settings_preview":
+                        Text("Show the active profile’s key mappings in a separate window.")
+                            .foregroundStyle(.secondary)
                     default: Text("Choose an action to edit this binding.")
                     }
                 }
@@ -53,8 +57,11 @@ struct BindingEditor: View {
                 Button("Clear") { model.clear(control, profile: profile) }
                     .disabled(saved == nil)
                 Spacer()
-                Button("Test") { model.test(draft) }
-                    .disabled(!valid || model.status?.output.available != true)
+                Button("Test") {
+                    if draft.type == "settings_preview" { model.showPreview?() }
+                    else { model.test(draft) }
+                }
+                .disabled(!valid || (draft.type != "settings_preview" && model.status?.output.available != true))
                 Button("Save") { model.save(draft, id: control, profile: profile) }
                     .buttonStyle(.borderedProminent)
                     .disabled(!valid || draft == saved)
@@ -76,6 +83,7 @@ struct BindingEditor: View {
         case "macro": draft = Action(type: type, keys: nil, steps: [.init(keys: [])])
         case "command": draft = Action(type: type, keys: nil, argv: ["/usr/bin/open", "-a", ""])
         case "profile_switch": draft = Action(type: type, keys: nil, profile: "next")
+        case "settings_preview": draft = Action(type: type, keys: nil)
         default: draft = Action()
         }
     }
@@ -93,6 +101,7 @@ struct BindingEditor: View {
             guard let argv = draft.argv, let program = argv.first, !program.isEmpty else { return false }
             return program != "/usr/bin/open" || (argv.count > 1 && !(argv.last ?? "").isEmpty)
         case "profile_switch": return draft.profile != nil
+        case "settings_preview": return true
         default: return false
         }
     }

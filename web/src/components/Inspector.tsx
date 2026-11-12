@@ -11,6 +11,7 @@ const DEFAULTS: Record<ActionType, Action> = {
   macro: { type: 'macro', steps: [{ keys: [] }] },
   command: { type: 'command', argv: [urlOpener, ''] },
   profile_switch: { type: 'profile_switch', profile: 'next' },
+  settings_preview: { type: 'settings_preview' },
 }
 
 export function Inspector() {
@@ -78,6 +79,7 @@ export function Inspector() {
           <option value="macro">Run a macro</option>
           <option value="command">Launch app / run command</option>
           <option value="profile_switch">Switch profile</option>
+          {draft.type === 'settings_preview' && <option value="settings_preview">Show Settings Preview</option>}
         </select>
       </div>
 
@@ -102,6 +104,10 @@ export function Inspector() {
         <CommandEditor argv={draft.argv || []} onChange={(argv) => patch({ argv })} />
       )}
 
+      {draft.type === 'settings_preview' && (
+        <p className="muted">This action opens the settings preview in the macOS app.</p>
+      )}
+
       {draft.type === 'profile_switch' && (
         <div>
           <label className="field">Switch to</label>
@@ -115,7 +121,7 @@ export function Inspector() {
       <div style={{ marginTop: 'auto' }}>
         {msg && <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>{msg}</div>}
         <div style={{ textAlign: 'center', marginBottom: 8 }}>
-          <button className="linkbtn" onClick={testFire}>▶ Test-fire</button>
+          <button className="linkbtn" onClick={testFire} disabled={draft.type === 'settings_preview'}>▶ Test-fire</button>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn danger" style={{ flex: 1 }} onClick={clear} disabled={!existing}>Clear</button>

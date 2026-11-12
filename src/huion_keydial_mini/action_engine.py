@@ -30,6 +30,7 @@ class ActionEngine:
         self.generation = 0
         self.admission = lambda preview: True
         self.busy_count = 0
+        self.show_settings_preview = None
 
     @property
     def settled(self):
@@ -150,6 +151,10 @@ class ActionEngine:
             target = self._next_profile() if action.profile == 'next' else action.profile
             if target:
                 self.keybind_manager.switch_profile(target)
+        elif action.type == 'settings_preview':
+            if self.show_settings_preview is None:
+                raise ActionRejected('unavailable')
+            self.show_settings_preview()
         else:
             raise ActionRejected('invalid_action')
 

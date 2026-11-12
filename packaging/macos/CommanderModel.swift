@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 
 struct Action: Codable, Equatable {
@@ -21,8 +22,25 @@ struct Action: Codable, Equatable {
             let arguments = argv ?? []
             return arguments.first == "/usr/bin/open"
                 ? (arguments.last ?? "Open") : ((arguments.first ?? "") as NSString).lastPathComponent
-        case "profile_switch": return "Profile"
+        case "profile_switch": return profile == "next" ? "Next profile" : (profile ?? "Profile")
+        case "settings_preview": return "Preview"
         default: return type
+        }
+    }
+
+    var detail: String {
+        switch type {
+        case "macro":
+            return (steps ?? []).map { step in
+                if let delay = step.delay_ms { return "Wait \(delay) ms" }
+                return (step.keys ?? []).map(shortKey).joined(separator: " + ")
+            }.joined(separator: ", ")
+        case "command":
+            return (argv ?? []).joined(separator: " ")
+        case "settings_preview":
+            return "Show Settings Preview"
+        default:
+            return title
         }
     }
 }
@@ -38,7 +56,15 @@ func shortKey(_ key: String) -> String {
 }
 
 struct Status: Decodable {
-    struct Device: Decodable { let connected: Bool; let ready: Bool; let state: String }
+    struct Device: Decodable {
+        let connected: Bool
+        let ready: Bool
+        let state: String
+        let transport: String?
+        let product: String?
+        let battery: Int?
+        let charging: Bool?
+    }
     struct Output: Decodable { let available: Bool }
     let device: Device
     let output: Output
@@ -81,6 +107,14 @@ final class CommanderModel: ObservableObject {
     @Published var error: String?
     @Published private(set) var starting = false
     @Published private(set) var busy = false
+    @Published private(set) var bluetoothBattery: Int?
+
+    let preferences: Preferences
+    var showPreview: (() -> Void)?
+    private let batteryReader = BatteryReader()
+    private var activationObserver: AnyCancellable?
+    private var externalApplication: String?
+    private var pendingProfileCheck = false
 
     private var process: Process?
     private var input: Pipe?
@@ -96,6 +130,47 @@ final class CommanderModel: ObservableObject {
     private let session = URLSession(configuration: .ephemeral)
 
     var activeProfile: String? { status?.active_profile }
+    var battery: Int? { status?.device.battery ?? bluetoothBattery }
+    var canRequestBluetoothBattery: Bool {
+        status?.device.transport == "bluetooth" && status?.device.product != nil && battery == nil
+    }
+
+    init(preferences: Preferences) {
+        self.preferences = preferences
+        batteryReader.onLevel = { [weak self] level in
+            guard let self, self.bluetoothBattery != level else { return }
+            self.bluetoothBattery = level
+        }
+        activationObserver = NSWorkspace.shared.notificationCenter
+            .publisher(for: NSWorkspace.didActivateApplicationNotification)
+            .sink { [weak self] note in
+                let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+                Task { @MainActor in self?.applicationActivated(app?.bundleIdentifier) }
+            }
+        applicationActivated(NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
+    }
+
+    func requestBluetoothBattery() {
+        guard canRequestBluetoothBattery else { return }
+        batteryReader.update(product: status?.device.product, requestPermission: true)
+    }
+
+    private func applicationActivated(_ bundleID: String?) {
+        guard let bundleID, bundleID != Bundle.main.bundleIdentifier,
+              externalApplication != bundleID else { return }
+        externalApplication = bundleID
+        reconsiderProfile()
+    }
+
+    func reconsiderProfile() {
+        if busy { pendingProfileCheck = true; return }
+        guard let activeProfile, preferences.automaticProfiles else { return }
+        let available = profiles.map(\.name)
+        if !available.contains(preferences.defaultProfile ?? "") { preferences.defaultProfile = activeProfile }
+        guard let target = preferences.profile(for: externalApplication, available: available),
+              target != activeProfile else { return }
+        activate(target, manually: false)
+    }
 
     func start() {
         guard process == nil else { return }
@@ -184,6 +259,7 @@ final class CommanderModel: ObservableObject {
         port = nil
         starting = false
         status = nil
+        batteryReader.update(product: nil)
         loadedProfile = nil
         revision += 1
         refreshTask?.cancel()
@@ -220,6 +296,7 @@ final class CommanderModel: ObservableObject {
 
     private func reload(force: Bool = false) async throws {
         let revision = self.revision
+        let firstStatus = status == nil
         let newStatus: Status = try await read("/api/status")
         guard revision == self.revision else { return }
         if newStatus.active_profile != loadedProfile || force {
@@ -232,6 +309,9 @@ final class CommanderModel: ObservableObject {
             loadedProfile = name
         }
         status = newStatus
+        batteryReader.update(product: newStatus.device.transport == "bluetooth" && newStatus.device.battery == nil
+                             ? newStatus.device.product : nil)
+        if firstStatus { reconsiderProfile() }
     }
 
     private func listen() async {
@@ -246,6 +326,7 @@ final class CommanderModel: ObservableObject {
                     guard case let .string(text) = message,
                           let event = try? JSONDecoder().decode(Event.self, from: Data(text.utf8))
                     else { continue }
+                    if event.type == "settings_preview" { showPreview?() }
                     if event.type == "key_event", event.pressed == true, let id = event.action_id {
                         highlighted = id
                         if identify { selection = id; identify = false }
@@ -272,7 +353,13 @@ final class CommanderModel: ObservableObject {
         busy = true
         revision += 1
         Task {
-            defer { busy = false }
+            defer {
+                busy = false
+                if pendingProfileCheck {
+                    pendingProfileCheck = false
+                    reconsiderProfile()
+                }
+            }
             do { try await work() }
             catch { self.error = error.localizedDescription }
         }
@@ -303,8 +390,12 @@ final class CommanderModel: ObservableObject {
         }
     }
 
-    func activate(_ profile: String) {
-        changeProfile("/api/profiles/\(segment(profile))/activate", method: "POST")
+    func activate(_ profile: String, manually: Bool = true) {
+        changeProfile("/api/profiles/\(segment(profile))/activate", method: "POST") {
+            if manually && !self.preferences.hasProfile(for: self.externalApplication) {
+                self.preferences.defaultProfile = profile
+            }
+        }
     }
 
     func create(_ name: String, clone: Bool) {
@@ -314,11 +405,15 @@ final class CommanderModel: ObservableObject {
     }
 
     func rename(_ profile: String, to name: String) {
-        changeProfile("/api/profiles/\(segment(profile))", method: "PUT", values: ["new_name": name])
+        changeProfile("/api/profiles/\(segment(profile))", method: "PUT", values: ["new_name": name]) {
+            self.preferences.renameProfile(profile, to: name)
+        }
     }
 
     func delete(_ profile: String) {
-        changeProfile("/api/profiles/\(segment(profile))", method: "DELETE")
+        changeProfile("/api/profiles/\(segment(profile))", method: "DELETE") {
+            self.preferences.removeProfile(profile)
+        }
     }
 
     func export(_ profile: String, to url: URL) {
@@ -335,10 +430,12 @@ final class CommanderModel: ObservableObject {
         } catch { self.error = error.localizedDescription }
     }
 
-    private func changeProfile(_ path: String, method: String, values: [String: String]? = nil) {
+    private func changeProfile(_ path: String, method: String, values: [String: String]? = nil,
+                               afterChange: (() -> Void)? = nil) {
         perform {
             let body = try values.map { try JSONEncoder().encode($0) }
             _ = try await self.send(path, method: method, body: body)
+            afterChange?()
             try await self.reload(force: true)
         }
     }

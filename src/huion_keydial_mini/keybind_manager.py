@@ -21,7 +21,7 @@ class EventType(Enum):
 
 
 # Canonical action types + legacy alias
-ACTION_TYPES = ("keystroke", "macro", "command", "profile_switch")
+ACTION_TYPES = ("keystroke", "macro", "command", "profile_switch", "settings_preview")
 _TYPE_ALIASES = {"keyboard": "keystroke"}
 
 

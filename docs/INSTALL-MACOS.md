@@ -15,9 +15,26 @@ data cable. In Commander, click **Permissions…** when prompted. Enable
 **System Settings → Privacy & Security**, then quit and reopen Commander.
 Quit the earlier Terminal preview before starting the desktop app.
 
-Use **Dial position** to match the keypad on your desk. The four options rotate
-the layout while each physical button keeps its bindings. The app remembers
-your orientation across launches and across profiles.
+Click the circular arrow above the keypad to rotate it 90° clockwise. The app
+remembers the orientation, and each physical button keeps its binding. Assigned
+actions appear on the keycaps. Hover over a control for its full mapping.
+
+The Commander icon in the macOS menu bar opens a translucent panel with the
+editor, preview, rotation, profile controls, appearance, and Quit. Choose
+**System**, **Light**, or **Dark** in that panel or in the **Keydial** menu.
+
+Select a keypad control and choose **Show Settings Preview** to bind a visual
+guide to the active profile. You can also open the guide from the menu bar.
+Use **Manage Profiles → Export Profile** or **Import Profile** to move mappings
+between installations as YAML files. Edits made with **Save** are stored
+in the current profile. In **App Profiles**, add a Mac application and choose
+which profile it should use when frontmost. Set a fallback for all other apps.
+
+The status area shows Bluetooth in blue or a USB connector when a remapping
+session uses that connection. If macOS does not supply the Bluetooth battery
+level, use the **Read Bluetooth Battery** button to authorize reading the
+standard Battery Service. The percentage and charging symbol depend on
+telemetry from the keypad. A USB connection by itself does not indicate charging.
 
 To uninstall, quit Commander, reopen **Keydial Commander Setup** from the disk
 image, and choose **Uninstall…**. Setup moves the installed app to the Trash

@@ -70,6 +70,7 @@ class MacInputSource:
         self._suspended = None
         self._capture_state = self.state = "disconnected"
         self.ready = False
+        self.device_info = {}
 
     @property
     def preview_allowed(self):
@@ -91,6 +92,7 @@ class MacInputSource:
             _macos.stop_capture()
             self._capturing = False
         self._held = 0
+        self.device_info = {}
 
     def suspend(self, reason):
         self._suspended = reason
@@ -141,6 +143,8 @@ class MacInputSource:
                 if self._capturing:
                     state, reset, held, events = _macos.poll_capture()
                     self._capture_state = self.STATES[state]
+                    if reset or slow_ticks == 0:
+                        self.device_info = _macos.device_info()
                     if reset:
                         self._held = held
                         self.resynchronize()

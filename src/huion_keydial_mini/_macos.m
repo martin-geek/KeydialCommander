@@ -4,6 +4,7 @@
 #include <CoreGraphics/CoreGraphics.h>
 #include <IOKit/hid/IOHIDManager.h>
 #include <IOKit/hid/IOHIDKeys.h>
+#include <IOKit/hid/IOHIDUsageTables.h>
 
 #define CAPACITY 1024
 #define CLICK 19
@@ -97,12 +98,32 @@ typedef struct {
     uint32_t location;
     bool location_known;
     bool failed;
+    bool prefer_usb;
 } CaptureSetup;
+
+static const char *device_transport(IOHIDDeviceRef device) {
+    CFTypeRef value = IOHIDDeviceGetProperty(device, CFSTR(kIOHIDTransportKey));
+    if (!value || CFGetTypeID(value) != CFStringGetTypeID()) return NULL;
+    if (CFStringCompare(value, CFSTR("USB"), kCFCompareCaseInsensitive) == kCFCompareEqualTo)
+        return "usb";
+    if (CFStringFind(value, CFSTR("Bluetooth"), kCFCompareCaseInsensitive).location != kCFNotFound)
+        return "bluetooth";
+    return NULL;
+}
+
+static void check_usb(const void *value, void *context) {
+    const char *transport = device_transport((IOHIDDeviceRef)value);
+    if (transport && !strcmp(transport, "usb")) *(bool *)context = true;
+}
 
 static void grab_device(const void *value, void *context) {
     CaptureSetup *setup = context;
     if (setup->failed) return;
     IOHIDDeviceRef device = (IOHIDDeviceRef)value;
+    if (setup->prefer_usb) {
+        const char *transport = device_transport(device);
+        if (!transport || strcmp(transport, "usb")) return;
+    }
     CFArrayRef elements = IOHIDDeviceCopyMatchingElements(device, NULL, 0);
     if (!elements) return;
     uint32_t controls = 0;
@@ -203,7 +224,10 @@ static PyObject *poll_capture(PyObject *self, PyObject *args) {
     if (changed || retry) {
         release_devices();
         CaptureSetup setup = {0};
-        if (devices) CFSetApplyFunction(devices, grab_device, &setup);
+        if (devices) {
+            CFSetApplyFunction(devices, check_usb, &setup.prefer_usb);
+            CFSetApplyFunction(devices, grab_device, &setup);
+        }
         if (setup.failed) state = CAPTURE_FAILED;
         else if (!devices || !CFSetGetCount(devices)) state = DISCONNECTED;
         else if (setup.controls != REQUIRED) state = MISSING_INPUT;
@@ -229,6 +253,78 @@ static PyObject *poll_capture(PyObject *self, PyObject *args) {
     event_count = 0;
     overflow = false;
     return Py_BuildValue("(iiIN)", state, reset, held, batch);
+}
+
+typedef struct {
+    const char *transport;
+    char product[256];
+    int battery;
+    int charging;
+} DeviceInfo;
+
+static int integer_property(IOHIDDeviceRef device, CFStringRef key) {
+    CFTypeRef property = IOHIDDeviceGetProperty(device, key);
+    int value;
+    if (!property) return -1;
+    if (CFGetTypeID(property) == CFBooleanGetTypeID()) return CFBooleanGetValue(property);
+    if (CFGetTypeID(property) == CFNumberGetTypeID() &&
+        CFNumberGetValue(property, kCFNumberIntType, &value)) return value;
+    return -1;
+}
+
+static void read_device_info(const void *value, void *context) {
+    DeviceInfo *info = context;
+    IOHIDDeviceRef device = (IOHIDDeviceRef)value;
+    const char *transport = device_transport(device);
+    if (!transport || (info->transport && strcmp(info->transport, transport))) return;
+    info->transport = transport;
+    CFTypeRef product = IOHIDDeviceGetProperty(device, CFSTR(kIOHIDProductKey));
+    if (!info->product[0] && product && CFGetTypeID(product) == CFStringGetTypeID())
+        CFStringGetCString(product, info->product, sizeof(info->product), kCFStringEncodingUTF8);
+    if (info->battery < 0) {
+        int percent = integer_property(device, CFSTR("BatteryPercent"));
+        if (percent < 0) percent = integer_property(device, CFSTR("BatteryLevel"));
+        if (percent >= 0 && percent <= 100) info->battery = percent;
+    }
+    if (info->charging < 0) {
+        int charging = integer_property(device, CFSTR("IsCharging"));
+        if (charging < 0) charging = integer_property(device, CFSTR("BatteryIsCharging"));
+        if (charging == 0 || charging == 1) info->charging = charging;
+    }
+
+    if (info->battery >= 0 && info->charging >= 0) return;
+    CFArrayRef elements = IOHIDDeviceCopyMatchingElements(device, NULL, 0);
+    if (!elements) return;
+    for (CFIndex i = 0; i < CFArrayGetCount(elements); i++) {
+        IOHIDElementRef element = (IOHIDElementRef)CFArrayGetValueAtIndex(elements, i);
+        if (IOHIDElementGetUsagePage(element) != kHIDPage_BatterySystem) continue;
+        IOHIDElementType type = IOHIDElementGetType(element);
+        if (type < kIOHIDElementTypeInput_Misc || type > kIOHIDElementTypeInput_ScanCodes) continue;
+        uint32_t usage = IOHIDElementGetUsage(element);
+        bool battery = info->battery < 0 && usage == kHIDUsage_BS_RelativeStateOfCharge;
+        bool charging = info->charging < 0 && usage == kHIDUsage_BS_Charging;
+        if (!battery && !charging) continue;
+        IOHIDValueRef reading = NULL;
+        if (IOHIDDeviceGetValue(device, element, &reading) != kIOReturnSuccess || !reading) continue;
+        CFIndex raw = IOHIDValueGetIntegerValue(reading);
+        if (battery && raw >= 0 && raw <= 100) info->battery = (int)raw;
+        if (charging && (raw == 0 || raw == 1)) info->charging = (int)raw;
+    }
+    CFRelease(elements);
+}
+
+static PyObject *device_info(PyObject *self, PyObject *args) {
+    DeviceInfo info = {.battery = -1, .charging = -1};
+    if (grabbed) CFSetApplyFunction(grabbed, read_device_info, &info);
+    PyObject *battery = info.battery < 0 ? Py_None : PyLong_FromLong(info.battery);
+    if (!battery) return NULL;
+    PyObject *result = Py_BuildValue("{s:z,s:z,s:O,s:O}",
+        "transport", info.transport,
+        "product", info.product[0] ? info.product : NULL,
+        "battery", battery,
+        "charging", info.charging < 0 ? Py_None : (info.charging ? Py_True : Py_False));
+    if (battery != Py_None) Py_DECREF(battery);
+    return result;
 }
 
 static PyObject *can_listen(PyObject *self, PyObject *args) {
@@ -274,6 +370,7 @@ static PyMethodDef methods[] = {
     {"start_capture", start_capture, METH_NOARGS, NULL},
     {"stop_capture", stop_capture, METH_NOARGS, NULL},
     {"poll_capture", poll_capture, METH_NOARGS, NULL},
+    {"device_info", device_info, METH_NOARGS, NULL},
     {"can_listen", can_listen, METH_NOARGS, NULL},
     {"can_post", can_post, METH_NOARGS, NULL},
     {"post_key", post_key, METH_VARARGS, NULL},

@@ -1,4 +1,4 @@
-export type ActionType = 'keystroke' | 'macro' | 'command' | 'profile_switch'
+export type ActionType = 'keystroke' | 'macro' | 'command' | 'profile_switch' | 'settings_preview'
 
 export interface MacroStep {
   keys?: string[]

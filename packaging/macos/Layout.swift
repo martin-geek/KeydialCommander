@@ -8,6 +8,24 @@ enum Orientation: String, CaseIterable, Identifiable {
     case lowerLeft = "Lower left"
 
     var id: Self { self }
+    var clockwise: Self {
+        switch self {
+        case .upperLeft: return .upperRight
+        case .upperRight: return .lowerRight
+        case .lowerRight: return .lowerLeft
+        case .lowerLeft: return .upperLeft
+        }
+    }
+
+    var degrees: Double {
+        switch self {
+        case .upperLeft: return 0
+        case .upperRight: return 90
+        case .lowerRight: return 180
+        case .lowerLeft: return 270
+        }
+    }
+
     var sideways: Bool { self == .upperRight || self == .lowerLeft }
 
     var size: CGSize {
@@ -39,14 +57,15 @@ struct Control: Identifiable {
             let row = index < 16 ? index / 4 : 4
             let column = index < 16 ? index % 4 : (button == 17 ? 0 : 2)
             return Control(id: "BUTTON_\(button)", label: "\(button)",
-                           frame: CGRect(x: CGFloat(column) + 0.055, y: CGFloat(row) + 1.50,
-                                         width: button == 17 ? 1.89 : 0.89,
-                                         height: button == 16 ? 1.89 : 0.89))
+                           frame: CGRect(x: 0.425 + CGFloat(column) * 0.804,
+                                         y: 2.04 + CGFloat(row) * 0.803,
+                                         width: button == 17 ? 1.55 : 0.741,
+                                         height: button == 16 ? 1.55 : 0.756))
         }
         controls += [
-            Control(id: "DIAL_CLICK", label: "Press", frame: CGRect(x: 0.22, y: 0.15, width: 1.14, height: 1.14)),
-            Control(id: "DIAL_CCW", label: "↺", frame: CGRect(x: 1.49, y: 0.41, width: 0.68, height: 0.61)),
-            Control(id: "DIAL_CW", label: "↻", frame: CGRect(x: 2.29, y: 0.41, width: 0.68, height: 0.61)),
+            Control(id: "DIAL_CLICK", label: "Press", frame: CGRect(x: 0.625, y: 0.72, width: 0.52, height: 0.55)),
+            Control(id: "DIAL_CCW", label: "↺", frame: CGRect(x: 1.83, y: 0.68, width: 0.76, height: 0.68)),
+            Control(id: "DIAL_CW", label: "↻", frame: CGRect(x: 2.80, y: 0.68, width: 0.76, height: 0.68)),
         ]
         return controls
     }()

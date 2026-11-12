@@ -4,8 +4,37 @@ import SwiftUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    let model = CommanderModel()
+    let preferences = Preferences()
+    lazy var model = CommanderModel(preferences: preferences)
+    private var previewWindow: NSWindow?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.appearance = preferences.appearance.native
+        model.showPreview = { [weak self] in self?.presentPreview() }
+        model.start()
+    }
+
     func applicationWillTerminate(_ notification: Notification) { model.stop() }
+
+    private func presentPreview() {
+        let window: NSWindow
+        if let previewWindow {
+            window = previewWindow
+        } else {
+            window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 810, height: 560),
+                              styleMask: [.titled, .closable, .resizable],
+                              backing: .buffered, defer: false)
+            window.title = "Settings Preview"
+            window.isReleasedWhenClosed = false
+            window.contentMinSize = NSSize(width: 670, height: 470)
+            window.contentViewController = NSHostingController(
+                rootView: MappingPreview(model: model, preferences: preferences))
+            window.center()
+            previewWindow = window
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+    }
 }
 
 @main
@@ -13,18 +42,34 @@ struct CommanderApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {
-        WindowGroup("Keydial Commander") {
-            CommanderWindow(model: delegate.model)
+        WindowGroup("Keydial Commander", id: "commander") {
+            CommanderWindow(model: delegate.model, preferences: delegate.preferences)
                 .frame(minWidth: 820, minHeight: 565)
-                .onAppear { delegate.model.start() }
         }
-        .commands { CommandGroup(replacing: .newItem) {} }
+        .commands {
+            CommandGroup(replacing: .newItem) {}
+            CommandMenu("Keydial") {
+                Button("Settings Preview") { delegate.model.showPreview?() }
+                Button("Rotate Keydial") { delegate.preferences.rotate() }
+                AppearancePicker(preferences: delegate.preferences)
+            }
+        }
+        MenuBarExtra("Keydial Commander", systemImage: "rectangle.grid.3x2") {
+            CommanderMenu(model: delegate.model, preferences: delegate.preferences)
+        }
+        .menuBarExtraStyle(.window)
+        Window("App Profiles", id: "app-profiles") {
+            AppProfilesWindow(model: delegate.model, preferences: delegate.preferences)
+                .frame(width: 485, height: 385)
+        }
+        .windowResizability(.contentSize)
     }
 }
 
 struct CommanderWindow: View {
+    @Environment(\.openWindow) private var openWindow
     @ObservedObject var model: CommanderModel
-    @AppStorage("dialOrientation") private var orientation: Orientation = .upperLeft
+    @ObservedObject var preferences: Preferences
 
     var body: some View {
         VStack(spacing: 0) {
@@ -33,23 +78,22 @@ struct CommanderWindow: View {
                     .font(.headline)
                 Spacer()
                 Picker("Profile", selection: Binding(
-                    get: { model.activeProfile ?? "" }, set: model.activate)) {
+                    get: { model.activeProfile ?? "" }, set: { model.activate($0) })) {
                     if model.activeProfile == nil { Text("Loading…").tag("") }
                     ForEach(model.profiles) { profile in Text(profile.name).tag(profile.name) }
                 }
                 .fixedSize()
                 .disabled(model.busy || model.activeProfile == nil)
-                profileMenu
+                ProfileMenu(model: model) { openWindow(id: "app-profiles") }
             }
             .padding(14)
             Divider()
             HSplitView {
                 VStack(spacing: 12) {
                     HStack {
-                        Picker("Dial position", selection: $orientation) {
-                            ForEach(Orientation.allCases) { Text($0.rawValue).tag($0) }
-                        }
-                        .fixedSize()
+                        RotateButton(preferences: preferences)
+                        Text("Dial \(preferences.orientation.rawValue.lowercased())")
+                            .font(.caption).foregroundStyle(.secondary)
                         Spacer()
                         Toggle(isOn: $model.identify) {
                             Label(model.identify ? "Press a control…" : "Identify", systemImage: "scope")
@@ -57,7 +101,7 @@ struct CommanderWindow: View {
                         .toggleStyle(.button)
                         .disabled(model.status?.device.ready != true)
                     }
-                    DeviceBoard(model: model, orientation: orientation)
+                    DeviceBoard(model: model, orientation: preferences.orientation)
                 }
                 .padding(16)
                 .frame(minWidth: 450, maxWidth: .infinity, maxHeight: .infinity)
@@ -79,8 +123,9 @@ struct CommanderWindow: View {
                     .frame(width: 8, height: 8)
                 Text(statusText).font(.callout)
                 Spacer()
+                DeviceIndicators(model: model)
                 if model.status?.output.available == false || model.status?.device.state == "input_permission_required" {
-                    Button("Permissions…", action: openPermissions)
+                    Button("Permissions…") { openKeydialPermissions(model) }
                 }
                 if model.status == nil && !model.starting {
                     Button("Restart Service", action: model.start)
@@ -88,6 +133,7 @@ struct CommanderWindow: View {
             }
             .padding(.horizontal, 14).padding(.vertical, 8)
         }
+        .preferredColorScheme(preferences.appearance.colorScheme)
         .alert("Keydial Commander", isPresented: Binding(
             get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button("OK") { model.error = nil }
@@ -109,8 +155,16 @@ struct CommanderWindow: View {
         }
     }
 
-    private var profileMenu: some View {
+}
+
+struct ProfileMenu: View {
+    @ObservedObject var model: CommanderModel
+    var openAppProfiles: () -> Void
+
+    var body: some View {
         Menu {
+            Button("App Profiles…", action: openAppProfiles)
+            Divider()
             Button("New Profile…") {
                 if let name = prompt("New Profile") { model.create(name, clone: false) }
             }
@@ -132,23 +186,20 @@ struct CommanderWindow: View {
                 .disabled(model.profiles.count < 2)
                 Divider()
                 Button("Export Profile…") {
-                    let panel = NSSavePanel()
-                    panel.nameFieldStringValue = "\(profile).yaml"
-                    if panel.runModal() == .OK, let url = panel.url { model.export(profile, to: url) }
+                    exportProfile(profile, model: model)
                 }
             }
             Button("Import Profile…") {
-                let panel = NSOpenPanel()
-                if panel.runModal() == .OK, let url = panel.url,
-                   let name = prompt("Import Profile", initial: url.deletingPathExtension().lastPathComponent) {
-                    model.importProfile(name, from: url)
-                }
+                importProfile(model)
             }
         } label: { Label("Manage Profiles", systemImage: "ellipsis.circle") }
         .fixedSize().disabled(model.busy || model.activeProfile == nil)
     }
 
-    private func prompt(_ title: String, initial: String = "") -> String? {
+}
+
+@MainActor
+func prompt(_ title: String, initial: String = "") -> String? {
         let alert = NSAlert()
         alert.messageText = title
         alert.informativeText = "Enter a profile name."
@@ -162,32 +213,43 @@ struct CommanderWindow: View {
         return field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func openPermissions() {
-        let accessibility = model.status?.output.available == false
-        if accessibility {
-            _ = CGRequestPostEventAccess()
-        } else {
-            _ = CGRequestListenEventAccess()
-        }
-        let pane = accessibility ? "Privacy_Accessibility" : "Privacy_ListenEvent"
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
-            NSWorkspace.shared.open(url)
-        }
-    }
-}
 
-private struct DeviceBoard: View {
+@MainActor
+func openKeydialPermissions(_ model: CommanderModel) {
+    let accessibility = model.status?.output.available == false
+    if accessibility {
+        _ = CGRequestPostEventAccess()
+    } else {
+        _ = CGRequestListenEventAccess()
+    }
+    let pane = accessibility ? "Privacy_Accessibility" : "Privacy_ListenEvent"
+    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
+        NSWorkspace.shared.open(url)
+    }
+    }
+
+struct DeviceBoard: View {
     @ObservedObject var model: CommanderModel
     let orientation: Orientation
+    var readOnly = false
+    private static let artwork = Bundle.main.url(forResource: "Keydial", withExtension: "heic")
+        .flatMap { NSImage(contentsOf: $0) }
 
     var body: some View {
         GeometryReader { proxy in
             let size = orientation.size
             let unit = max(1, min(proxy.size.width / size.width, proxy.size.height / size.height))
             ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: 19)
-                    .fill(Color(nsColor: .windowBackgroundColor))
-                    .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+                let natural = Orientation.upperLeft.size
+                if let image = Self.artwork {
+                    Image(nsImage: image)
+                        .resizable()
+                        .frame(width: natural.width * unit, height: natural.height * unit)
+                        .rotationEffect(.degrees(orientation.degrees))
+                        .position(x: size.width * unit / 2, y: size.height * unit / 2)
+                        .shadow(color: .black.opacity(0.24), radius: 11, y: 5)
+                        .accessibilityHidden(true)
+                }
                 ForEach(Control.all) { control in
                     let rect = orientation.place(control.frame)
                     tile(control, width: rect.width * unit, height: rect.height * unit)
@@ -200,36 +262,48 @@ private struct DeviceBoard: View {
     }
 
     private func tile(_ control: Control, width: CGFloat, height: CGFloat) -> some View {
-        let selected = model.selection == control.id
+        let action = model.bindings[control.id]
+        let selected = !readOnly && model.selection == control.id
         let highlighted = model.highlighted?.split(separator: "+").contains(Substring(control.id)) == true
         let corner: CGFloat = control.dialCenter ? min(width, height) / 2 : 9
-        return Button {
-            model.selection = control.id
-            model.identify = false
-        } label: {
-            VStack(spacing: 3) {
-                Text(control.label)
-                    .font(.system(size: control.label.count == 1 && control.id.hasPrefix("DIAL") ? 18 : 13,
-                                  weight: .semibold, design: .rounded))
-                if let label = model.bindings[control.id]?.title, !label.isEmpty {
-                    Text(label).font(.system(size: 10)).lineLimit(1).padding(.horizontal, 3)
-                        .foregroundStyle(.secondary)
-                }
+        let title = action?.title ?? ""
+        let face = VStack(spacing: 3) {
+            Text(title.isEmpty ? control.label : title)
+                .font(.system(size: title.isEmpty && control.id.hasPrefix("DIAL") ? 15 : 12,
+                              weight: .semibold, design: .rounded))
+                .lineLimit(1).minimumScaleFactor(0.6)
+                .padding(.horizontal, 4)
+            if !title.isEmpty && !control.dialCenter {
+                Text(control.label).font(.system(size: 9, weight: .medium)).opacity(0.68)
             }
-            .frame(width: width, height: height)
-            .background(highlighted ? Color.green.opacity(0.38)
-                        : selected ? Color.accentColor.opacity(0.24)
-                        : Color(nsColor: .controlBackgroundColor),
-                        in: RoundedRectangle(cornerRadius: corner))
-            .overlay(RoundedRectangle(cornerRadius: corner)
-                .strokeBorder(selected ? Color.accentColor : Color.secondary.opacity(0.24),
-                              lineWidth: selected ? 2 : 1))
-            .contentShape(RoundedRectangle(cornerRadius: corner))
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Control.name(control.id))
-        .accessibilityValue(model.bindings[control.id]?.title ?? "Unassigned")
+        .foregroundStyle(.white)
+        .shadow(color: .black.opacity(0.85), radius: 2, y: 1)
+        .frame(width: width, height: height)
+        .background(highlighted ? Color.green.opacity(0.46)
+                    : selected ? Color.cyan.opacity(0.22)
+                    : control.id != "DIAL_CLICK" && control.id.hasPrefix("DIAL") ? Color.black.opacity(0.46)
+                    : Color.clear,
+                    in: RoundedRectangle(cornerRadius: corner))
+        .overlay(RoundedRectangle(cornerRadius: corner)
+            .strokeBorder(selected ? Color.cyan : Color.clear, lineWidth: 2))
+        .contentShape(RoundedRectangle(cornerRadius: corner))
+        let name = Control.name(control.id)
+        let detail = action?.detail ?? "Unassigned"
+        return Group {
+            if readOnly {
+                face
+            } else {
+                Button {
+                    model.selection = control.id
+                    model.identify = false
+                } label: { face }
+                .buttonStyle(.plain)
+            }
+        }
+        .accessibilityLabel(name)
+        .accessibilityValue(detail)
         .accessibilityAddTraits(selected ? .isSelected : [])
-        .help(Control.name(control.id))
+        .help("\(name) · \(detail)")
     }
 }

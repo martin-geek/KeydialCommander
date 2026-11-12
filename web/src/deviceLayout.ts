@@ -49,6 +49,8 @@ export function bindingLabel(a: Action | undefined): string {
       return `Macro (${(a.steps || []).length})`
     case 'command':
       return (a.argv || [])[0] ? `▶ ${basename((a.argv || [])[0])}` : 'Command'
+    case 'settings_preview':
+      return 'Settings Preview'
     case 'profile_switch':
       return `⇄ ${a.profile}`
     default:

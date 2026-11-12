@@ -117,4 +117,7 @@ def validate_action(data, *, known_keys=KEY_MAPPING):
             raise ValidationError("profile_switch requires a non-empty 'profile'")
         return {"type": "profile_switch", "profile": profile.strip()}
 
+    if atype == "settings_preview":
+        return {"type": "settings_preview"}
+
     raise ValidationError("Unknown action type: %r" % atype)

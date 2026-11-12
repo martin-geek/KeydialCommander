@@ -53,6 +53,9 @@ class HuionKeydialMini:
                 exclude_names={self.uinput_handler.config.uinput_device_name},
             )
         self.action_engine = ActionEngine(self.keybind_manager, self.uinput_handler)
+        if self.native_mode:
+            self.action_engine.show_settings_preview = (
+                lambda: self.event_bus.publish({'type': 'settings_preview'}))
 
         # Commander API (embedded aiohttp server)
         from .api_server import ApiServer
@@ -93,7 +96,8 @@ class HuionKeydialMini:
 
     def _runtime_status(self):
         return {
-            'device': {'ready': self.evdev_source.ready, 'state': self.evdev_source.state},
+            'device': {'ready': self.evdev_source.ready, 'state': self.evdev_source.state,
+                       **getattr(self.evdev_source, 'device_info', {})},
             'output': {'available': self.uinput_handler.available,
                        'cleanup_confirmed': self.uinput_handler.cleanup_confirmed},
             'actions': {'busy_count': self.action_engine.busy_count},

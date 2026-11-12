@@ -7,6 +7,9 @@ struct LayoutTests {
         let identifiers = Set(Control.all.map(\.id))
         precondition(identifiers == Set((1...18).map { "BUTTON_\($0)" } +
                                         ["DIAL_CLICK", "DIAL_CW", "DIAL_CCW"]))
+        precondition(Orientation.upperLeft.clockwise.clockwise.clockwise.clockwise == .upperLeft)
+        precondition(Orientation.upperLeft.clockwise == .upperRight)
+        precondition(Orientation.lowerRight.clockwise == .lowerLeft)
         let dial = Control.all.first { $0.id == "DIAL_CLICK" }!
         let corners: [(Orientation, Bool, Bool)] = [
             (.upperLeft, true, true), (.upperRight, false, true),
