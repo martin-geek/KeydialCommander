@@ -1,44 +1,104 @@
-# Keydial Commander for macOS
+# Install and use Keydial Commander on macOS
 
-## Install the desktop app
+[**Download Keydial Commander 1.3.1 for Apple Silicon (.dmg)**](https://github.com/martin-geek/KeydialCommander/releases/download/v1.3.1-macos/Keydial.Commander-1.3.1-macOS-arm64.dmg)
 
-The desktop app uses a native macOS window and bundles the remapping engine.
-Open the Keydial Commander disk image, double-click **Keydial Commander Setup**,
-then click **Install** and **Open App**. Setup installs into your account’s
-`~/Applications` folder. You can open Commander from Spotlight after that.
-The desktop build targets macOS 14 or later and is built for the Mac’s CPU
-architecture.
+Requires an Apple Silicon Mac running macOS 14 or later and a Huion Keydial Mini
+(K20). The installer bundles everything you need to run the desktop app.
 
-Pair the Huion Keydial Mini (K20) in Bluetooth settings or connect it with a USB
-data cable. In Commander, click **Permissions…** when prompted. Enable
-**Accessibility** and **Input Monitoring** for Keydial Commander in
-**System Settings → Privacy & Security**, then quit and reopen Commander.
-Quit the earlier Terminal preview before starting the desktop app.
+## Install and open Commander
 
-Click the circular arrow above the keypad to rotate it 90° clockwise. The app
-remembers the orientation, and each physical button keeps its binding. Assigned
-actions appear on the keycaps. Hover over a control for its full mapping.
+1. Download the DMG above and double-click it in Finder.
+2. In the mounted disk image, double-click **Keydial Commander Setup**.
+3. Click **Install**. When Setup reports **Installed in ~/Applications**, click
+   **Open App**. For an update, quit Commander completely and choose **Reinstall**.
+4. To find Commander later, open Finder, press **Shift–Command–G**, enter
+   `~/Applications`, and press Return. Open **Keydial Commander.app** there.
+   You can also search for **Keydial Commander** in Spotlight. Finder’s regular
+   **Applications** shortcut opens the system-wide folder `/Applications`.
 
-The Commander icon in the macOS menu bar opens a translucent panel with the
-editor, preview, rotation, profile controls, appearance, and Quit. Choose
-**System**, **Light**, or **Dark** in that panel or in the **Keydial** menu.
+![Keydial Commander Setup with the Install button and the ~/Applications destination](screenshots/macos/setup.jpg)
 
-Select a keypad control and choose **Show Settings Preview** to bind a visual
-guide to the active profile. You can also open the guide from the menu bar.
-Use **Manage Profiles → Export Profile** or **Import Profile** to move mappings
-between installations as YAML files. Edits made with **Save** are stored
-in the current profile. In **App Profiles**, add a Mac application and choose
-which profile it should use when frontmost. Set a fallback for all other apps.
+The release is an unnotarized preview. If macOS blocks a downloaded copy,
+review the message in **System Settings → Privacy & Security**. If macOS offers
+**Open Anyway**, use it only after confirming you downloaded the installer
+from this repository. [Apple’s guide to opening apps safely](https://support.apple.com/en-us/102445)
 
-The status area shows Bluetooth in blue or a USB connector when a remapping
-session uses that connection. If macOS does not supply the Bluetooth battery
-level, use the **Read Bluetooth Battery** button to authorize reading the
-standard Battery Service. The percentage and charging symbol depend on
-telemetry from the keypad. A USB connection by itself does not indicate charging.
+## Grant permissions and connect the K20
 
-To uninstall, quit Commander, reopen **Keydial Commander Setup** from the disk
-image, and choose **Uninstall…**. Setup moves the installed app to the Trash
-and keeps your saved profiles and orientation setting.
+1. In the Commander window, click **Permissions…**. Under **System Settings →
+   Privacy & Security → Accessibility**, enable **Keydial Commander** so it can
+   send the shortcuts you assign.
+2. Back in **Privacy & Security**, open **Input Monitoring** and enable
+   **Keydial Commander** so it can read the keypad’s buttons and dial. If
+   Commander is missing from either list, click **+**, press
+   **Shift–Command–G**, enter `~/Applications`, and select
+   **Keydial Commander.app**.
+3. Choose **Quit Commander** from the menu bar icon or press **Command–Q**.
+   Reopen the installed app. Pair the K20 in **System Settings → Bluetooth**
+   or connect it using a USB data cable.
+4. Once Commander shows **Keydial Mini connected**, click **Identify** and press
+   a physical key. Commander should select its matching control. If capture
+   fails, quit the Huion utility and any other K20 remapper, then reconnect.
+
+[Apple’s Accessibility guide](https://support.apple.com/guide/mac-help/mh43185/mac)
+· [Apple’s Input Monitoring guide](https://support.apple.com/guide/mac-help/mchl4cedafb6/mac)
+
+## How to use the app
+
+### Assign your first shortcut
+
+1. Click a button on the pictured keypad. For the dial, choose **Press**,
+   clockwise, or counterclockwise.
+2. Set **Action** to **Keyboard shortcut**, click **Record Shortcut**, and press
+   the combination on your Mac keyboard. Try **Command–Z** to map Undo. You can
+   also choose keys individually with **Add Key**.
+3. Click **Save**. The mapping appears on the keycap and its full label is
+   available on hover. Click **Test** to send the action, or switch to an app
+   where you can safely try it and press the physical key.
+4. Use **Hold while pressed** for an action that should stay down while you hold
+   the physical key. To remove a binding, select its control and click **Clear**.
+
+![Native editor with Button 1 selected, Command-Z recorded, and Save enabled](screenshots/macos/record-shortcut.jpg)
+
+The **Action** menu also supports macros, opening an app or URL, running a
+command, and switching profiles.
+
+### Rotate the keypad and open the preview
+
+Click the circular arrow above the keypad image to rotate it 90° clockwise.
+Commander remembers the orientation and keeps each binding with its physical key.
+
+Open **Keydial → Settings Preview** from the app’s menu, or choose
+**Settings Preview** from the Commander icon in the macOS menu bar. To open the
+guide from the keypad itself, select a button, set **Action** to
+**Show Settings Preview**, and click **Save**. The preview shows the active
+profile and lists its saved mappings.
+
+![Settings Preview showing the current profile and the rotated keypad](screenshots/macos/settings-preview.jpg)
+
+### Manage profiles and use the menu bar
+
+- Select a profile at the top of the editor. Use **Manage Profiles** to
+  create, duplicate, rename, or delete a profile.
+- Choose **Export Profile…** to save a YAML backup. Choose **Import Profile…**
+  to load it under a profile name. Each export contains the selected profile’s
+  bindings.
+- Open **Manage Profiles → App Profiles…**, click **Add App…**, and select a Mac
+  app. Pick the profile to use when it is in front. Use **All other apps** to
+  choose the fallback profile.
+- Click Commander’s grid icon in the macOS menu bar to open the editor, show
+  the preview, rotate the keypad, change profiles, or quit. **Appearance**
+  offers **System**, **Light**, and **Dark**.
+- The status area shows a blue Bluetooth symbol or a USB connector for the
+  active connection. It shows a battery percentage and charging indicator
+  when the keypad reports them. If Bluetooth battery data is unavailable,
+  click **Read Bluetooth Battery** next to the indicator.
+
+## Uninstall
+
+Quit Commander, reopen **Keydial Commander Setup** from the DMG, and choose
+**Uninstall…**. Setup moves Commander to the Trash. Your saved profiles and
+orientation are kept.
 
 ## Build the disk image
 
@@ -79,7 +139,7 @@ Leave Terminal running while you use the keypad. Press Control+C in Terminal
 to stop remapping and release the keypad. Profiles are saved under
 `~/.config/huion-keydial-mini/profiles/`.
 
-## Connect the keypad
+### Connect the keypad from the browser preview
 
 1. Pair the K20 in **System Settings → Bluetooth**, or connect it with a USB
    data cable.
