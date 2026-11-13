@@ -110,6 +110,10 @@ struct CommanderMenu: View {
         VStack(alignment: .leading, spacing: 11) {
             HStack {
                 Text("Keydial Commander").font(.headline)
+                if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
+                    Text(version).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        .accessibilityLabel("Version \(version)")
+                }
                 Spacer()
                 DeviceIndicators(model: model)
             }
@@ -131,8 +135,9 @@ struct CommanderMenu: View {
             ProfileMenu(model: model) { open("app-profiles") }
             AppearancePicker(preferences: preferences)
             Divider()
-            if model.status?.output.available == false || model.status?.device.state == "input_permission_required" {
-                menuButton("Permissions…", icon: "lock.shield") { openKeydialPermissions(model) }
+            menuButton("Permissions…", icon: "lock.shield") {
+                open("commander")
+                model.showPermissionSetup = true
             }
             if model.status == nil && !model.starting {
                 menuButton("Restart Service", icon: "arrow.clockwise") { model.start() }
@@ -140,7 +145,7 @@ struct CommanderMenu: View {
             menuButton("Quit Commander", icon: "power") { NSApp.terminate(nil) }
         }
         .padding(15)
-        .frame(width: 285)
+        .frame(width: 310)
         .background(.regularMaterial)
         .preferredColorScheme(preferences.appearance.colorScheme)
     }
@@ -304,4 +309,32 @@ func importProfile(_ model: CommanderModel) {
        let name = prompt("Import Profile", initial: url.deletingPathExtension().lastPathComponent) {
         model.importProfile(name, from: url)
     }
+}
+
+
+@MainActor
+enum KeypadMenuIcon {
+    static let image: NSImage = {
+        let size = NSSize(width: 18, height: 18)
+        let icon = NSImage(size: size, flipped: false) { _ in
+            NSColor.black.set()
+            let body = NSBezierPath(roundedRect: NSRect(x: 3.5, y: 0.75, width: 11, height: 16.5),
+                                    xRadius: 2.5, yRadius: 2.5)
+            body.lineWidth = 1.35
+            body.stroke()
+            let dial = NSBezierPath(ovalIn: NSRect(x: 5.1, y: 11, width: 4.5, height: 4.5))
+            dial.lineWidth = 1.1
+            dial.stroke()
+            for row in 0..<3 {
+                for column in 0..<3 {
+                    let key = NSRect(x: 5.4 + Double(column) * 2.55, y: 2.45 + Double(row) * 2.55,
+                                     width: 1.7, height: 1.7)
+                    NSBezierPath(roundedRect: key, xRadius: 0.35, yRadius: 0.35).fill()
+                }
+            }
+            return true
+        }
+        icon.isTemplate = true
+        return icon
+    }()
 }

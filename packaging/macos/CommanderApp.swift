@@ -54,8 +54,11 @@ struct CommanderApp: App {
                 AppearancePicker(preferences: delegate.preferences)
             }
         }
-        MenuBarExtra("Keydial Commander", systemImage: "rectangle.grid.3x2") {
+        MenuBarExtra {
             CommanderMenu(model: delegate.model, preferences: delegate.preferences)
+        } label: {
+            Image(nsImage: KeypadMenuIcon.image)
+                .accessibilityLabel("Keydial Commander")
         }
         .menuBarExtraStyle(.window)
         Window("App Profiles", id: "app-profiles") {
@@ -125,7 +128,7 @@ struct CommanderWindow: View {
                 Spacer()
                 DeviceIndicators(model: model)
                 if model.status?.output.available == false || model.status?.device.state == "input_permission_required" {
-                    Button("Permissions…") { openKeydialPermissions(model) }
+                    Button("Permissions…") { model.showPermissionSetup = true }
                 }
                 if model.status == nil && !model.starting {
                     Button("Restart Service", action: model.start)
@@ -134,6 +137,9 @@ struct CommanderWindow: View {
             .padding(.horizontal, 14).padding(.vertical, 8)
         }
         .preferredColorScheme(preferences.appearance.colorScheme)
+        .sheet(isPresented: $model.showPermissionSetup) {
+            PermissionSetupView()
+        }
         .alert("Keydial Commander", isPresented: Binding(
             get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button("OK") { model.error = nil }
@@ -215,19 +221,42 @@ func prompt(_ title: String, initial: String = "") -> String? {
     }
 
 
-@MainActor
-func openKeydialPermissions(_ model: CommanderModel) {
-    let accessibility = model.status?.output.available == false
-    if accessibility {
-        _ = CGRequestPostEventAccess()
-    } else {
-        _ = CGRequestListenEventAccess()
+private struct PermissionSetupView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Set Up Keydial Permissions").font(.title2.bold())
+            Text("Allow Commander to read the keypad and send the shortcuts you assign.")
+            permission("Shortcut Output", explanation: "Enable Keydial Commander under Device Control and Data Access (Accessibility on older macOS versions).",
+                       pane: "Privacy_Accessibility", request: CGRequestPostEventAccess)
+            permission("Input Monitoring", explanation: "Enable Keydial Commander under Input Monitoring so it can read the buttons and dial.",
+                       pane: "Privacy_ListenEvent", request: CGRequestListenEventAccess)
+            Text("If an enabled entry still blocks access, remove it and add Keydial Commander from Applications. Then quit and reopen Commander.")
+                .font(.callout).foregroundStyle(.secondary)
+            HStack {
+                Spacer()
+                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+            }
+        }
+        .frame(width: 450)
+        .padding(24)
+        .fixedSize(horizontal: true, vertical: false)
     }
-    let pane = accessibility ? "Privacy_Accessibility" : "Privacy_ListenEvent"
-    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
-        NSWorkspace.shared.open(url)
+
+    private func permission(_ title: String, explanation: String, pane: String,
+                            request: @escaping () -> Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(explanation).font(.callout)
+            Button(title + " Settings…") {
+                _ = request()
+                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+        }
     }
-    }
+}
 
 struct DeviceBoard: View {
     @ObservedObject var model: CommanderModel

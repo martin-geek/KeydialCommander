@@ -9,18 +9,20 @@ Requires an Apple Silicon Mac running macOS 14 or later and a Huion Keydial Mini
 
 The linked 1.3.1 installer uses your home Applications folder
 (`~/Applications`) and only detects the K20 over Bluetooth. The steps below
-describe Setup 1.3.2, which you can build using the instructions on this page.
+describe Setup 1.3.3, which you can build using the instructions on this page.
 
 1. Download the DMG above and double-click it in Finder.
 2. In the mounted disk image, double-click **Keydial Commander Setup**.
-3. Click **Install**. When Setup reports **Installed in /Applications**, click
-   **Open App**. For an update, quit Commander completely and choose **Reinstall**.
+3. Click **Install**. For an update, quit Commander completely and choose
+   **Reinstall**. Setup confirms the installed version in **Applications**, or
+   displays the error if it cannot finish. Dismiss the message and click
+   **Open App**.
 4. To find Commander later, open **Applications** in Finder and double-click
    **Keydial Commander.app**, or search for it in Spotlight.
 
 ![Keydial Commander Setup and the Install button in the 1.3.1 release](screenshots/macos/setup.jpg)
 
-If you still have a copy in `~/Applications` after installing 1.3.2,
+If you still have a copy in `~/Applications` after installing 1.3.3,
 move the older copy to the Trash in Finder
 so macOS opens the new one. Your profiles and settings are kept.
 
@@ -31,12 +33,15 @@ from this repository. [Apple’s guide to opening apps safely](https://support.a
 
 ## Grant permissions and connect the K20
 
-1. In the Commander window, click **Permissions…**, or open **System Settings →
+1. Commander opens **Set Up Keydial Permissions** when it starts and detects
+   missing access. You can reopen it with **Permissions…** in the menu bar.
+   Click **Shortcut Output Settings…**, or open **System Settings →
    Privacy & Security** manually. On **macOS 27 Golden Gate**, open **Device
    Control and Data Access**. On earlier macOS versions, open **Accessibility**.
    Enable **Keydial Commander** so it can send the shortcuts you assign.
    Commander calls this permission **Accessibility** in its status message.
-2. Back in **Privacy & Security**, open **Input Monitoring** and enable
+2. Click **Input Monitoring Settings…** or open **Input Monitoring** in
+   **Privacy & Security** and enable
    **Keydial Commander** so it can read the keypad’s buttons and dial. If
    Commander is missing from either list, click **+**, press
    **Shift–Command–G**, enter `/Applications`, and select
@@ -111,8 +116,9 @@ profile and lists its saved mappings.
 - Open **Manage Profiles → App Profiles…**, click **Add App…**, and select a Mac
   app. Pick the profile to use when it is in front. Use **All other apps** to
   choose the fallback profile.
-- Click Commander’s grid icon in the macOS menu bar to open the editor, show
-  the preview, rotate the keypad, change profiles, or quit. **Appearance**
+- Click Commander’s keypad icon in the macOS menu bar to see the running
+  version, open the editor, show the preview, rotate the keypad, change
+  profiles, or quit. **Appearance**
   offers **System**, **Light**, and **Dark**.
 - The status area shows a blue Bluetooth symbol or a USB connector for the
   active connection. It shows a battery percentage and charging indicator
@@ -138,8 +144,16 @@ bash packaging/macos/build.sh
 ```
 
 The disk image is written under `dist/`. This build uses local ad hoc code
-signing. Distribution to other Macs requires Developer ID signing and Apple
-notarization for normal Gatekeeper acceptance.
+signing. macOS may ask for permission again after replacing an ad hoc build.
+For public distribution, use the same Developer ID Application identity for
+each build so macOS can recognize the updated app. Set
+`KEYDIAL_SIGNING_IDENTITY` to that identity and `KEYDIAL_NOTARY_PROFILE` to
+a keychain profile configured with Apple’s `notarytool`. The build signs the
+bundled service and apps, submits the disk image, and staples the approved
+ticket. [Apple’s signing guidance](https://developer.apple.com/documentation/xcode/creating-distribution-signed-code-for-the-mac)
+· [Apple’s notarization guidance](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)
+
+See the [macOS changelog](../packaging/macos/CHANGELOG.md) for version history.
 
 ## Optional browser preview
 

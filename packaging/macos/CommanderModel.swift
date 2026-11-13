@@ -105,6 +105,7 @@ final class CommanderModel: ObservableObject {
     @Published var selection = "BUTTON_1"
     @Published var identify = false
     @Published var error: String?
+    @Published var showPermissionSetup = false
     @Published private(set) var starting = false
     @Published private(set) var busy = false
     @Published private(set) var bluetoothBattery: Int?
@@ -115,6 +116,7 @@ final class CommanderModel: ObservableObject {
     private var activationObserver: AnyCancellable?
     private var externalApplication: String?
     private var pendingProfileCheck = false
+    private var checkedLaunchPermissions = false
 
     private var process: Process?
     private var input: Pipe?
@@ -312,6 +314,11 @@ final class CommanderModel: ObservableObject {
         batteryReader.update(product: newStatus.device.transport == "bluetooth" && newStatus.device.battery == nil
                              ? newStatus.device.product : nil)
         if firstStatus { reconsiderProfile() }
+        if !checkedLaunchPermissions {
+            checkedLaunchPermissions = true
+            showPermissionSetup = !newStatus.output.available
+                || newStatus.device.state == "input_permission_required"
+        }
     }
 
     private func listen() async {

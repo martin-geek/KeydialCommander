@@ -10,13 +10,25 @@ app="$staging/Keydial Commander.app"
 setup="$staging/Keydial Commander Setup.app"
 arch="$(uname -m)"
 app_id="io.github.martin-geek.keydial-commander"
-version="1.3.2"
+version="$(cat packaging/macos/VERSION)"
+signing_identity="${KEYDIAL_SIGNING_IDENTITY:--}"
+notary_profile="${KEYDIAL_NOTARY_PROFILE:-}"
+signing_flags=()
+engine_signing_flags=()
+if [[ "$signing_identity" != "-" ]]; then
+    signing_flags=(--options runtime --timestamp)
+    engine_signing_flags=(--codesign-identity "$signing_identity")
+elif [[ -n "$notary_profile" ]]; then
+    echo "Set KEYDIAL_SIGNING_IDENTITY to a Developer ID Application identity for notarization." >&2
+    exit 1
+fi
 
 mkdir -p "$work" "$output"
 "$python" -m pip install --no-deps --no-build-isolation -e .
 PYINSTALLER_CONFIG_DIR="$work/cache" "$python" -m PyInstaller --noconfirm --onedir \
     --name keydial-engine --distpath "$work/frozen" --workpath "$work/pyinstaller" \
-    --specpath "$work" --target-arch "$arch" --exclude-module evdev packaging/macos/engine.py
+    --specpath "$work" --target-arch "$arch" --exclude-module evdev \
+    ${engine_signing_flags[@]+"${engine_signing_flags[@]}"} packaging/macos/engine.py
 
 rm -rf "$staging"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" \
@@ -64,9 +76,17 @@ PLIST
 plist "$app" Commander "$app_id" "Keydial Commander"
 plist "$setup" Setup "$app_id.setup" "Keydial Commander Setup"
 cp LICENSE "$staging/License.txt"
-codesign --force --sign - "$app"
-codesign --force --sign - "$setup"
+codesign --force --sign "$signing_identity" ${signing_flags[@]+"${signing_flags[@]}"} "$app"
+codesign --force --sign "$signing_identity" ${signing_flags[@]+"${signing_flags[@]}"} "$setup"
 codesign --verify --deep --strict "$app"
 codesign --verify --strict "$setup"
-hdiutil create -ov -format UDZO -volname "Keydial Commander" \
-    -srcfolder "$staging" "$output/Keydial Commander-$version-macOS-$arch.dmg"
+dmg="$output/Keydial Commander-$version-macOS-$arch.dmg"
+hdiutil create -ov -format UDZO -volname "Keydial Commander" -srcfolder "$staging" "$dmg"
+if [[ "$signing_identity" != "-" ]]; then
+    codesign --force --sign "$signing_identity" --timestamp "$dmg"
+fi
+if [[ -n "$notary_profile" ]]; then
+    xcrun notarytool submit "$dmg" --keychain-profile "$notary_profile" --wait
+    xcrun stapler staple "$dmg"
+    xcrun stapler validate "$dmg"
+fi

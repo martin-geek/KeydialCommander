@@ -6,7 +6,7 @@ struct KeydialSetup: App {
     var body: some Scene {
         WindowGroup("Keydial Commander Setup") {
             SetupView()
-                .frame(width: 455, height: 245)
+                .frame(width: 490, height: 265)
         }
         .windowResizability(.contentSize)
         .commands { CommandGroup(replacing: .newItem) {} }
@@ -14,11 +14,12 @@ struct KeydialSetup: App {
 }
 
 private final class SetupState: ObservableObject {
-    @Published var installed = false
+    @Published var installedVersion: String?
     @Published var legacyInstalled = false
     @Published var confirmRemoval = false
     @Published var message = ""
-    @Published var showError = false
+    @Published var showResult = false
+    @Published var resultTitle = ""
 }
 
 private struct SetupView: View {
@@ -27,14 +28,25 @@ private struct SetupView: View {
     private let installation = AppInstallation.standard
     private let legacy = AppInstallation.legacy
 
+    private var installed: Bool { state.installedVersion != nil }
+    private var source: URL {
+        Bundle.main.bundleURL.deletingLastPathComponent()
+            .appendingPathComponent(AppInstallation.name, isDirectory: true)
+    }
+    private var installerVersion: String? { AppInstallation.version(at: source) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
             Label("Keydial Commander", systemImage: "rectangle.grid.3x2")
                 .font(.title2.weight(.semibold))
             Text("Install in Applications or move the installed app to the Trash.")
                 .foregroundStyle(.secondary)
-            Text(state.installed ? "Installed in /Applications" : "Install location: /Applications")
+            Text(state.installedVersion.map { "Installed in /Applications · Version \($0)" }
+                 ?? "Install location: /Applications")
                 .font(.callout)
+            if let installerVersion {
+                Text("Installer version \(installerVersion)").font(.callout).foregroundStyle(.secondary)
+            }
             if state.legacyInstalled {
                 Text("An earlier copy is in your home Applications folder.")
                     .font(.callout).foregroundStyle(.secondary)
@@ -42,12 +54,12 @@ private struct SetupView: View {
             Spacer()
             HStack {
                 Button("Uninstall…", role: .destructive) { state.confirmRemoval = true }
-                    .disabled(!state.installed && !state.legacyInstalled)
+                    .disabled(!installed && !state.legacyInstalled)
                 Spacer()
-                if state.installed {
+                if installed {
                     Button("Open App") { open() }
                 }
-                Button(state.installed ? "Reinstall" : "Install") { apply(install) }
+                Button(installed ? "Reinstall" : "Install") { apply(install) }
                     .buttonStyle(.borderedProminent)
             }
         }
@@ -57,23 +69,23 @@ private struct SetupView: View {
             Button("Move to Trash", role: .destructive) { apply(uninstall) }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(state.installed && state.legacyInstalled
+            Text(installed && state.legacyInstalled
                 ? "Both installed copies will be moved to the Trash. Your saved profiles and settings will be kept."
                 : "Your saved profiles and settings will be kept.")
         }
-        .alert("Keydial Commander Setup", isPresented: $state.showError) {
+        .alert(state.resultTitle, isPresented: $state.showResult) {
             Button("OK", role: .cancel) {}
         } message: { Text(state.message) }
     }
 
     private func refresh() {
-        state.installed = installation.installed
+        state.installedVersion = installation.installedVersion
         state.legacyInstalled = legacy.installed
     }
 
     private func apply(_ action: () throws -> Void) {
         do { try action() }
-        catch { state.message = error.localizedDescription; state.showError = true }
+        catch { showResult("Setup couldn’t complete the operation", error.localizedDescription) }
         refresh()
     }
 
@@ -85,21 +97,29 @@ private struct SetupView: View {
 
     private func install() throws {
         try requireClosed()
-        let source = Bundle.main.bundleURL.deletingLastPathComponent()
-            .appendingPathComponent(AppInstallation.name, isDirectory: true)
-        try installation.install(from: source)
+        let updating = installation.installed
+        let version = try installation.install(from: source)
+        showResult(updating ? "Reinstall complete" : "Installation complete",
+                   "Keydial Commander \(version) is installed in /Applications.")
     }
 
     private func uninstall() throws {
         try requireClosed()
         if installation.installed { try installation.uninstall() }
         if legacy.installed { try legacy.uninstall() }
+        showResult("Uninstall complete", "Keydial Commander was moved to the Trash.")
+    }
+
+    private func showResult(_ title: String, _ message: String) {
+        state.resultTitle = title
+        state.message = message
+        state.showResult = true
     }
 
     private func open() {
         NSWorkspace.shared.openApplication(at: installation.target, configuration: .init()) { _, error in
             if let error {
-                DispatchQueue.main.async { state.message = error.localizedDescription; state.showError = true }
+                DispatchQueue.main.async { showResult("Couldn’t open Commander", error.localizedDescription) }
             }
         }
     }

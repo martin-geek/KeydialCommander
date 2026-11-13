@@ -1,0 +1,27 @@
+# Keydial Commander for macOS changelog
+
+`VERSION` sets the Finder, Setup, menu bar, and disk image version. Update it
+and add an entry here for each macOS release.
+
+## 1.3.3
+
+- Setup shows the installer version and the version in Applications. It
+  verifies the staged bundle, replaces the app and its bundled service
+  together, and reports the result. It rejects an older installer when a
+  newer version is already in Applications.
+- Commander opens permission setup when its service reports missing access.
+  The setup window explains what each permission does and links to its
+  macOS settings.
+- The menu bar uses a monochrome keypad icon and shows the running version.
+- The build script supports Developer ID signing and Apple notarization.
+
+## 1.3.2
+
+- Recognizes the wired K20 and displays its USB connection.
+- Installs in the main Applications folder and distinguishes a busy keypad
+  from other capture failures.
+
+## 1.3.1
+
+- Ships the native editor, graphical Setup, rotating keypad artwork, mapping
+  preview, menu bar controls, appearance settings, and per-app profiles.
