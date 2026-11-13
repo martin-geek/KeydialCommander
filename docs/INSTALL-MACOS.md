@@ -7,16 +7,22 @@ Requires an Apple Silicon Mac running macOS 14 or later and a Huion Keydial Mini
 
 ## Install and open Commander
 
+The linked 1.3.1 installer uses your home Applications folder
+(`~/Applications`) and only detects the K20 over Bluetooth. The steps below
+describe Setup 1.3.2, which you can build using the instructions on this page.
+
 1. Download the DMG above and double-click it in Finder.
 2. In the mounted disk image, double-click **Keydial Commander Setup**.
-3. Click **Install**. When Setup reports **Installed in ~/Applications**, click
+3. Click **Install**. When Setup reports **Installed in /Applications**, click
    **Open App**. For an update, quit Commander completely and choose **Reinstall**.
-4. To find Commander later, open Finder, press **Shift–Command–G**, enter
-   `~/Applications`, and press Return. Open **Keydial Commander.app** there.
-   You can also search for **Keydial Commander** in Spotlight. Finder’s regular
-   **Applications** shortcut opens the system-wide folder `/Applications`.
+4. To find Commander later, open **Applications** in Finder and double-click
+   **Keydial Commander.app**, or search for it in Spotlight.
 
-![Keydial Commander Setup with the Install button and the ~/Applications destination](screenshots/macos/setup.jpg)
+![Keydial Commander Setup and the Install button in the 1.3.1 release](screenshots/macos/setup.jpg)
+
+If you still have a copy in `~/Applications` after installing 1.3.2,
+move the older copy to the Trash in Finder
+so macOS opens the new one. Your profiles and settings are kept.
 
 The release is an unnotarized preview. If macOS blocks a downloaded copy,
 review the message in **System Settings → Privacy & Security**. If macOS offers
@@ -29,11 +35,11 @@ from this repository. [Apple’s guide to opening apps safely](https://support.a
    Privacy & Security** manually. On **macOS 27 Golden Gate**, open **Device
    Control and Data Access**. On earlier macOS versions, open **Accessibility**.
    Enable **Keydial Commander** so it can send the shortcuts you assign.
-   Commander 1.3.1 calls this permission **Accessibility** in its status message.
+   Commander calls this permission **Accessibility** in its status message.
 2. Back in **Privacy & Security**, open **Input Monitoring** and enable
    **Keydial Commander** so it can read the keypad’s buttons and dial. If
    Commander is missing from either list, click **+**, press
-   **Shift–Command–G**, enter `~/Applications`, and select
+   **Shift–Command–G**, enter `/Applications`, and select
    **Keydial Commander.app**.
 3. Choose **Quit Commander** from the menu bar icon or press **Command–Q**.
    Reopen the installed app. Pair the K20 in **System Settings → Bluetooth**
@@ -56,7 +62,7 @@ copy. Refresh the entry for the installed app.
 2. In **System Settings → Privacy & Security → Device Control and Data
    Access** (**Accessibility** on macOS 26 and earlier), select the
    **Keydial Commander** row and click **−**.
-3. Click **+**, press **Shift–Command–G**, enter `~/Applications`, and select
+3. Click **+**, press **Shift–Command–G**, enter `/Applications`, and select
    **Keydial Commander.app**. Turn on its switch.
 4. Reopen Commander from that folder. If Commander then asks for **Input
    Monitoring** while its switch is already on, repeat the removal and
@@ -173,8 +179,9 @@ to stop remapping and release the keypad. Profiles are saved under
 If the status shows **Cannot access K20 input**, quit other keypad remappers
 or the Huion utility if it controls the K20, then reconnect the keypad.
 Commander waits for all expected controls before activating a capture
-session. The macOS backend matches Huion vendor ID `0x256c` and K20 product
-ID `0x8251`.
+session. The macOS backend matches Huion vendor ID `0x256c` with product
+ID `0x8251` over Bluetooth or `0x0069` over USB. Version 1.3.1 only
+matched the Bluetooth ID and showed a wired K20 as disconnected.
 
 **Open URL** uses `/usr/bin/open` with the URL as its argument. **Launch app**
 uses `/usr/bin/open` with two arguments, `-a` and the app name. Imported

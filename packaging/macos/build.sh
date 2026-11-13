@@ -10,7 +10,7 @@ app="$staging/Keydial Commander.app"
 setup="$staging/Keydial Commander Setup.app"
 arch="$(uname -m)"
 app_id="io.github.martin-geek.keydial-commander"
-version="1.3.1"
+version="1.3.2"
 
 mkdir -p "$work" "$output"
 "$python" -m pip install --no-deps --no-build-isolation -e .

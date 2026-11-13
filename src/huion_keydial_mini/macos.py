@@ -53,7 +53,7 @@ class MacKeyOutput(KeyOutput):
 class MacInputSource:
     """Track one exclusively seized K20 session and rearm after invalidation."""
 
-    STATES = ("disconnected", "ready", "capture_failed", "missing_input")
+    STATES = ("disconnected", "ready", "capture_failed", "missing_input", "device_busy")
 
     def __init__(self, on_event, translator, on_state, output_available):
         self.on_event = on_event

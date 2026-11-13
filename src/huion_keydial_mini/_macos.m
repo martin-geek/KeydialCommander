@@ -5,6 +5,7 @@
 #include <IOKit/hid/IOHIDManager.h>
 #include <IOKit/hid/IOHIDKeys.h>
 #include <IOKit/hid/IOHIDUsageTables.h>
+#include <os/log.h>
 
 #define CAPACITY 1024
 #define CLICK 19
@@ -12,7 +13,7 @@
 #define REQUIRED ((1u << WHEEL) - 1u)
 #define MODE CFSTR("KeydialCommanderHID")
 
-enum CaptureState { DISCONNECTED, CAPTURING, CAPTURE_FAILED, MISSING_INPUT };
+enum CaptureState { DISCONNECTED, CAPTURING, CAPTURE_FAILED, MISSING_INPUT, DEVICE_BUSY };
 
 typedef struct {
     int control;
@@ -97,7 +98,7 @@ typedef struct {
     uint32_t controls;
     uint32_t location;
     bool location_known;
-    bool failed;
+    enum CaptureState error;
     bool prefer_usb;
 } CaptureSetup;
 
@@ -118,7 +119,7 @@ static void check_usb(const void *value, void *context) {
 
 static void grab_device(const void *value, void *context) {
     CaptureSetup *setup = context;
-    if (setup->failed) return;
+    if (setup->error) return;
     IOHIDDeviceRef device = (IOHIDDeviceRef)value;
     if (setup->prefer_usb) {
         const char *transport = device_transport(device);
@@ -139,10 +140,17 @@ static void grab_device(const void *value, void *context) {
         // A session covers one physical unit. Duplicate controls also catch
         // multiple units when the transport supplies no location ID.
         if ((controls & setup->controls) ||
-            (known && setup->location_known && location != setup->location) ||
-            IOHIDDeviceOpen(device, kIOHIDOptionsTypeSeizeDevice) != kIOReturnSuccess) {
-            setup->failed = true;
+            (known && setup->location_known && location != setup->location)) {
+            setup->error = CAPTURE_FAILED;
+            os_log_error(OS_LOG_DEFAULT, "K20 HID interfaces overlap or report different locations (existing=%{public}x, new=%{public}x)", setup->controls, controls);
         } else {
+            IOReturn result = IOHIDDeviceOpen(device, kIOHIDOptionsTypeSeizeDevice);
+            if (result != kIOReturnSuccess) {
+                setup->error = result == kIOReturnExclusiveAccess ? DEVICE_BUSY : CAPTURE_FAILED;
+                os_log_error(OS_LOG_DEFAULT, "K20 HID exclusive open returned %{public}08x", result);
+                CFRelease(elements);
+                return;
+            }
             if (known) {
                 setup->location = location;
                 setup->location_known = true;
@@ -166,21 +174,30 @@ static void grab_device(const void *value, void *context) {
     CFRelease(elements);
 }
 
+static CFDictionaryRef match_product(int product) {
+    int vendor = 0x256C;
+    const void *keys[] = {CFSTR(kIOHIDVendorIDKey), CFSTR(kIOHIDProductIDKey)};
+    CFNumberRef vid = CFNumberCreate(NULL, kCFNumberIntType, &vendor);
+    CFNumberRef pid = CFNumberCreate(NULL, kCFNumberIntType, &product);
+    const void *values[] = {vid, pid};
+    CFDictionaryRef match = CFDictionaryCreate(NULL, keys, values, 2,
+        &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+    CFRelease(vid);
+    CFRelease(pid);
+    return match;
+}
+
 static PyObject *start_capture(PyObject *self, PyObject *args) {
     if (manager) Py_RETURN_TRUE;
     manager = IOHIDManagerCreate(NULL, kIOHIDManagerOptionIndependentDevices);
     grabbed = CFSetCreateMutable(NULL, 0, &kCFTypeSetCallBacks);
-    const void *keys[] = {CFSTR(kIOHIDVendorIDKey), CFSTR(kIOHIDProductIDKey)};
-    int vendor = 0x256C, product = 0x8251;
-    CFNumberRef vid = CFNumberCreate(NULL, kCFNumberIntType, &vendor);
-    CFNumberRef pid = CFNumberCreate(NULL, kCFNumberIntType, &product);
-    const void *values[] = {vid, pid};
-    CFDictionaryRef matching = CFDictionaryCreate(NULL, keys, values, 2,
-        &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-    IOHIDManagerSetDeviceMatching(manager, matching);
+    // The same K20 uses different product IDs over Bluetooth and USB.
+    const void *products[] = {match_product(0x8251), match_product(0x0069)};
+    CFArrayRef matching = CFArrayCreate(NULL, products, 2, &kCFTypeArrayCallBacks);
+    IOHIDManagerSetDeviceMatchingMultiple(manager, matching);
     CFRelease(matching);
-    CFRelease(vid);
-    CFRelease(pid);
+    CFRelease(products[0]);
+    CFRelease(products[1]);
     IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetCurrent(), MODE);
     if (IOHIDManagerOpen(manager, kIOHIDOptionsTypeNone) != kIOReturnSuccess) {
         IOHIDManagerUnscheduleFromRunLoop(manager, CFRunLoopGetCurrent(), MODE);
@@ -219,7 +236,7 @@ static PyObject *poll_capture(PyObject *self, PyObject *args) {
     CFSetRef devices = IOHIDManagerCopyDevices(manager);
     bool changed = devices != detected &&
                    (!devices || !detected || !CFEqual(devices, detected));
-    bool retry = (state == CAPTURE_FAILED || state == MISSING_INPUT)
+    bool retry = (state == CAPTURE_FAILED || state == MISSING_INPUT || state == DEVICE_BUSY)
                  && CFAbsoluteTimeGetCurrent() >= retry_after;
     if (changed || retry) {
         release_devices();
@@ -228,7 +245,7 @@ static PyObject *poll_capture(PyObject *self, PyObject *args) {
             CFSetApplyFunction(devices, check_usb, &setup.prefer_usb);
             CFSetApplyFunction(devices, grab_device, &setup);
         }
-        if (setup.failed) state = CAPTURE_FAILED;
+        if (setup.error) state = setup.error;
         else if (!devices || !CFSetGetCount(devices)) state = DISCONNECTED;
         else if (setup.controls != REQUIRED) state = MISSING_INPUT;
         else state = CAPTURING;
@@ -257,6 +274,7 @@ static PyObject *poll_capture(PyObject *self, PyObject *args) {
 
 typedef struct {
     const char *transport;
+    bool usb;
     char product[256];
     int battery;
     int charging;
@@ -276,7 +294,8 @@ static void read_device_info(const void *value, void *context) {
     DeviceInfo *info = context;
     IOHIDDeviceRef device = (IOHIDDeviceRef)value;
     const char *transport = device_transport(device);
-    if (!transport || (info->transport && strcmp(info->transport, transport))) return;
+    if (!transport || (info->usb && strcmp(transport, "usb")) ||
+        (info->transport && strcmp(info->transport, transport))) return;
     info->transport = transport;
     CFTypeRef product = IOHIDDeviceGetProperty(device, CFSTR(kIOHIDProductKey));
     if (!info->product[0] && product && CFGetTypeID(product) == CFStringGetTypeID())
@@ -292,7 +311,7 @@ static void read_device_info(const void *value, void *context) {
         if (charging == 0 || charging == 1) info->charging = charging;
     }
 
-    if (info->battery >= 0 && info->charging >= 0) return;
+    if (!CFSetContainsValue(grabbed, device) || (info->battery >= 0 && info->charging >= 0)) return;
     CFArrayRef elements = IOHIDDeviceCopyMatchingElements(device, NULL, 0);
     if (!elements) return;
     for (CFIndex i = 0; i < CFArrayGetCount(elements); i++) {
@@ -315,7 +334,10 @@ static void read_device_info(const void *value, void *context) {
 
 static PyObject *device_info(PyObject *self, PyObject *args) {
     DeviceInfo info = {.battery = -1, .charging = -1};
-    if (grabbed) CFSetApplyFunction(grabbed, read_device_info, &info);
+    if (detected) {
+        CFSetApplyFunction(detected, check_usb, &info.usb);
+        CFSetApplyFunction(detected, read_device_info, &info);
+    }
     PyObject *battery = info.battery < 0 ? Py_None : PyLong_FromLong(info.battery);
     if (!battery) return NULL;
     PyObject *result = Py_BuildValue("{s:z,s:z,s:O,s:O}",

@@ -150,7 +150,8 @@ struct CommanderWindow: View {
         case "release_controls": return "Release the keypad controls to resume"
         case "recovering": return "Recovering keypad input…"
         case "missing_input": return "Waiting for all keypad controls"
-        case "capture_failed": return "Cannot access the keypad. Quit other remapping apps and reconnect it."
+        case "device_busy": return "Keypad in use by another app. Quit it and reconnect the keypad."
+        case "capture_failed": return "Commander couldn’t read keypad input. Reconnect the keypad to retry."
         default: return "Keydial Mini not connected"
         }
     }

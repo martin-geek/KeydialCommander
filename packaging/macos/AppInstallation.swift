@@ -4,6 +4,10 @@ struct AppInstallation {
     static let name = "Keydial Commander.app"
     static let identifier = "io.github.martin-geek.keydial-commander"
 
+    static let standard = AppInstallation(directory: URL(fileURLWithPath: "/Applications", isDirectory: true))
+    static let legacy = AppInstallation(directory: FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Applications", isDirectory: true))
+
     let directory: URL
     private let files = FileManager.default
 
@@ -16,7 +20,7 @@ struct AppInstallation {
         }
         try files.createDirectory(at: directory, withIntermediateDirectories: true)
         if files.fileExists(atPath: target.path) && !installed {
-            throw SetupError.message("A different item already uses that name in ~/Applications.")
+            throw SetupError.message("A different item already uses that name in \(directory.path).")
         }
         let staging = directory.appendingPathComponent(".keydial-\(UUID().uuidString)", isDirectory: true)
         defer { try? files.removeItem(at: staging) }
@@ -32,7 +36,7 @@ struct AppInstallation {
     @discardableResult
     func uninstall() throws -> URL? {
         guard installed else {
-            throw SetupError.message("Keydial Commander was not found in ~/Applications.")
+            throw SetupError.message("Keydial Commander was not found in \(directory.path).")
         }
         var trashed: NSURL?
         try files.trashItem(at: target, resultingItemURL: &trashed)
