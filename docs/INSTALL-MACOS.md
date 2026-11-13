@@ -46,6 +46,22 @@ from this repository. [Apple’s guide to opening apps safely](https://support.a
 · [Apple’s Accessibility guide](https://support.apple.com/guide/mac-help/mh43185/mac)
 · [Apple’s Input Monitoring guide](https://support.apple.com/guide/mac-help/mchl4cedafb6/mac)
 
+### Commander still asks for permission after you enable it
+
+macOS can retain a permission entry for an earlier build of Commander. The
+switch can appear on while macOS rejects shortcut output from the installed
+copy. Refresh the entry for the installed app.
+
+1. Quit Commander with **Command–Q**.
+2. In **System Settings → Privacy & Security → Device Control and Data
+   Access** (**Accessibility** on macOS 26 and earlier), select the
+   **Keydial Commander** row and click **−**.
+3. Click **+**, press **Shift–Command–G**, enter `~/Applications`, and select
+   **Keydial Commander.app**. Turn on its switch.
+4. Reopen Commander from that folder. If Commander then asks for **Input
+   Monitoring** while its switch is already on, repeat the removal and
+   re-add steps in **Input Monitoring**, then quit and reopen Commander.
+
 ## How to use the app
 
 ### Assign your first shortcut
