@@ -25,9 +25,11 @@ from this repository. [Apple’s guide to opening apps safely](https://support.a
 
 ## Grant permissions and connect the K20
 
-1. In the Commander window, click **Permissions…**. Under **System Settings →
-   Privacy & Security → Accessibility**, enable **Keydial Commander** so it can
-   send the shortcuts you assign.
+1. In the Commander window, click **Permissions…**, or open **System Settings →
+   Privacy & Security** manually. On **macOS 27 Golden Gate**, open **Device
+   Control and Data Access**. On earlier macOS versions, open **Accessibility**.
+   Enable **Keydial Commander** so it can send the shortcuts you assign.
+   Commander 1.3.1 calls this permission **Accessibility** in its status message.
 2. Back in **Privacy & Security**, open **Input Monitoring** and enable
    **Keydial Commander** so it can read the keypad’s buttons and dial. If
    Commander is missing from either list, click **+**, press
@@ -40,7 +42,8 @@ from this repository. [Apple’s guide to opening apps safely](https://support.a
    a physical key. Commander should select its matching control. If capture
    fails, quit the Huion utility and any other K20 remapper, then reconnect.
 
-[Apple’s Accessibility guide](https://support.apple.com/guide/mac-help/mh43185/mac)
+[Golden Gate permission names](https://support.logi.com/hc/en-001/articles/1500005514962-Logi-Options-permissions-on-macOS)
+· [Apple’s Accessibility guide](https://support.apple.com/guide/mac-help/mh43185/mac)
 · [Apple’s Input Monitoring guide](https://support.apple.com/guide/mac-help/mchl4cedafb6/mac)
 
 ## How to use the app
@@ -144,8 +147,9 @@ to stop remapping and release the keypad. Profiles are saved under
 1. Pair the K20 in **System Settings → Bluetooth**, or connect it with a USB
    data cable.
 2. In **System Settings → Privacy & Security**, enable **Input Monitoring**
-   and **Accessibility** for the terminal application you use to run
-   Commander. Quit and reopen that terminal, then start Commander again.
+   and **Device Control and Data Access** (called **Accessibility** on macOS 26
+   and earlier) for the terminal application you use to run Commander. Quit
+   and reopen that terminal, then start Commander again.
 3. Use the editor’s **Identify** mode to check the 18 buttons, both dial
    directions, and the dial click. Then assign a shortcut to a button and try
    it in a text editor. For example, Command+A uses `KEY_LEFTMETA+KEY_A`.
