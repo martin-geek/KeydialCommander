@@ -4,14 +4,29 @@ import SwiftUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    let preferences = Preferences()
+    let preferences = Preferences.shared
     lazy var model = CommanderModel(preferences: preferences)
     private var previewWindow: NSWindow?
+    var reopenEditor: (() -> Void)?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.appearance = preferences.appearance.native
+        applyPresence(preferences.appPresence)
+        preferences.onAppPresenceChange = { [weak self] presence in self?.applyPresence(presence) }
         model.showPreview = { [weak self] in self?.presentPreview() }
         model.start()
+    }
+
+    private func applyPresence(_ presence: AppPresence) {
+        NSApp.setActivationPolicy(presence.showsDock ? .regular : .accessory)
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        guard !hasVisibleWindows, let reopenEditor else { return true }
+        reopenEditor()
+        return false
     }
 
     func applicationWillTerminate(_ notification: Notification) { model.stop() }
@@ -40,10 +55,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct CommanderApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    @ObservedObject private var preferences = Preferences.shared
+
+    private var menuBarInserted: Binding<Bool> {
+        Binding(get: { preferences.appPresence.showsMenuBar }, set: { inserted in
+            // Removing the status item must leave the Dock as a way back to the app.
+            if !inserted && preferences.appPresence.showsMenuBar {
+                preferences.appPresence = .dockOnly
+            }
+        })
+    }
 
     var body: some Scene {
         WindowGroup("Keydial Commander", id: "commander") {
-            CommanderWindow(model: delegate.model, preferences: delegate.preferences)
+            CommanderWindow(model: delegate.model, preferences: preferences, delegate: delegate)
                 .frame(minWidth: 820, minHeight: 565)
         }
         .commands {
@@ -51,10 +76,11 @@ struct CommanderApp: App {
             CommandMenu("Keydial") {
                 Button("Settings Preview") { delegate.model.showPreview?() }
                 Button("Rotate Keydial") { delegate.preferences.rotate() }
-                AppearancePicker(preferences: delegate.preferences)
+                AppearancePicker(preferences: preferences)
+                AppPresencePicker(preferences: preferences)
             }
         }
-        MenuBarExtra {
+        MenuBarExtra(isInserted: menuBarInserted) {
             CommanderMenu(model: delegate.model, preferences: delegate.preferences)
         } label: {
             Image(nsImage: KeypadMenuIcon.image)
@@ -73,6 +99,7 @@ struct CommanderWindow: View {
     @Environment(\.openWindow) private var openWindow
     @ObservedObject var model: CommanderModel
     @ObservedObject var preferences: Preferences
+    let delegate: AppDelegate
 
     var body: some View {
         VStack(spacing: 0) {
@@ -88,6 +115,8 @@ struct CommanderWindow: View {
                 .fixedSize()
                 .disabled(model.busy || model.activeProfile == nil)
                 ProfileMenu(model: model) { openWindow(id: "app-profiles") }
+                AppPresencePicker(preferences: preferences)
+                    .fixedSize()
             }
             .padding(14)
             Divider()
@@ -141,6 +170,10 @@ struct CommanderWindow: View {
             .padding(.horizontal, 14).padding(.vertical, 8)
         }
         .preferredColorScheme(preferences.appearance.colorScheme)
+        .onAppear {
+            let openEditor = openWindow
+            delegate.reopenEditor = { openEditor(id: "commander") }
+        }
         .confirmationDialog("Enable USB remapping?", isPresented: $model.confirmUSBRemapping, titleVisibility: .visible) {
             Button("Enable USB Remapping") { model.enableUSBRemapping() }
             Button("Cancel", role: .cancel) {}

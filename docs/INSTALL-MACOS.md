@@ -9,7 +9,7 @@ Requires an Apple Silicon Mac running macOS 14 or later and a Huion Keydial Mini
 
 The linked 1.3.1 installer uses your home Applications folder
 (`~/Applications`) and only detects the K20 over Bluetooth. The steps below
-describe Setup 1.3.5, which you can build using the instructions on this page.
+describe Setup 1.3.6, which you can build using the instructions on this page.
 
 1. Download the DMG above and double-click it in Finder.
 2. In the mounted disk image, double-click **Keydial Commander Setup**.
@@ -22,7 +22,7 @@ describe Setup 1.3.5, which you can build using the instructions on this page.
 
 ![Keydial Commander Setup and the Install button in the 1.3.1 release](screenshots/macos/setup.jpg)
 
-If you still have a copy in `~/Applications` after installing 1.3.5,
+If you still have a copy in `~/Applications` after installing 1.3.6,
 move the older copy to the Trash in Finder
 so macOS opens the new one. Your profiles and settings are kept.
 
@@ -134,6 +134,13 @@ profile and lists its saved mappings.
   active connection. It shows a battery percentage and charging indicator
   when the keypad reports them. If Bluetooth battery data is unavailable,
   click **Read Bluetooth Battery** next to the indicator.
+
+### Keep Commander running in the background
+
+Close the editor window to keep your mappings active. Quitting Commander stops
+remapping. Use **Show In** in the editor or the keypad menu to choose **Menu Bar
+Only**, **Dock Only**, or **Both**. Commander remembers your choice. Reopen the
+editor from the keypad menu, the Dock, or Applications.
 
 ## Uninstall
 

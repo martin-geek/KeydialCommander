@@ -8,6 +8,8 @@ struct PreferencesTests {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = Preferences(defaults: defaults)
+        precondition(preferences.appPresence == .both)
+        preferences.appPresence = .menuBarOnly
         preferences.defaultProfile = "Everyday"
         preferences.assign(.init(bundleID: "com.example.art", name: "Art", profile: "Painting"))
         preferences.rotate()
@@ -15,6 +17,7 @@ struct PreferencesTests {
         precondition(preferences.profile(for: "com.example.other", available: ["Everyday", "Painting"]) == "Everyday")
 
         let restored = Preferences(defaults: defaults)
+        precondition(restored.appPresence == .menuBarOnly)
         precondition(restored.orientation == .upperRight)
         precondition(restored.appProfiles.first?.profile == "Painting")
         restored.renameProfile("Painting", to: "Illustration")

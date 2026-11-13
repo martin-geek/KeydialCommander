@@ -101,6 +101,16 @@ struct AppearancePicker: View {
     }
 }
 
+struct AppPresencePicker: View {
+    @ObservedObject var preferences: Preferences
+
+    var body: some View {
+        Picker("Show In", selection: $preferences.appPresence) {
+            ForEach(AppPresence.allCases) { Text($0.title).tag($0) }
+        }
+    }
+}
+
 struct CommanderMenu: View {
     @Environment(\.openWindow) private var openWindow
     @ObservedObject var model: CommanderModel
@@ -134,6 +144,7 @@ struct CommanderMenu: View {
             }.disabled(model.busy || model.activeProfile == nil)
             ProfileMenu(model: model) { open("app-profiles") }
             AppearancePicker(preferences: preferences)
+            AppPresencePicker(preferences: preferences)
             Divider()
             menuButton("Permissions…", icon: "lock.shield") {
                 open("commander")

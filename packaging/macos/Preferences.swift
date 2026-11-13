@@ -24,6 +24,22 @@ enum Appearance: String, CaseIterable, Identifiable {
     }
 }
 
+enum AppPresence: String, CaseIterable, Identifiable {
+    case menuBarOnly, dockOnly, both
+
+    var id: Self { self }
+    var showsMenuBar: Bool { self != .dockOnly }
+    var showsDock: Bool { self != .menuBarOnly }
+
+    var title: String {
+        switch self {
+        case .menuBarOnly: return "Menu Bar Only"
+        case .dockOnly: return "Dock Only"
+        case .both: return "Both"
+        }
+    }
+}
+
 struct AppProfile: Codable, Equatable, Identifiable {
     let bundleID: String
     let name: String
@@ -33,6 +49,16 @@ struct AppProfile: Codable, Equatable, Identifiable {
 
 @MainActor
 final class Preferences: ObservableObject {
+    static let shared = Preferences()
+
+    @Published var appPresence: AppPresence {
+        didSet {
+            defaults.set(appPresence.rawValue, forKey: "commanderAppPresence")
+            if oldValue != appPresence { onAppPresenceChange?(appPresence) }
+        }
+    }
+    var onAppPresenceChange: ((AppPresence) -> Void)?
+
     @Published var orientation: Orientation {
         didSet { defaults.set(orientation.rawValue, forKey: "dialOrientation") }
     }
@@ -58,6 +84,8 @@ final class Preferences: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        appPresence = defaults.string(forKey: "commanderAppPresence")
+            .flatMap(AppPresence.init(rawValue:)) ?? .both
         orientation = defaults.string(forKey: "dialOrientation").flatMap(Orientation.init(rawValue:)) ?? .upperLeft
         appearance = defaults.string(forKey: "commanderAppearance").flatMap(Appearance.init(rawValue:)) ?? .system
         appProfiles = defaults.data(forKey: "commanderAppProfiles").flatMap {

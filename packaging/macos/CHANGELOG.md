@@ -3,6 +3,11 @@
 `VERSION` sets the Finder, Setup, menu bar, and disk image version. Update it
 and add an entry here for each macOS release.
 
+## 1.3.6
+
+- Adds a saved **Show In** setting for the menu bar, Dock, or both.
+- Keeps remapping active after the editor window closes.
+
 ## 1.3.5
 
 - Adds an opt-in USB tablet mode for the K20, so wired remapping can work
