@@ -58,6 +58,8 @@ async def test_capture_rearms_after_held_controls_and_disconnect(monkeypatch):
 
     source = MacInputSource(on_event, InputTranslator(), connections.append, lambda: True)
     source.on_reset = resets.append
+    physical_presses = []
+    source.on_observed_press = physical_presses.append
     batches = iter([
         (1, True, 1, []),
         (1, False, 0, [(1, 0)]),
@@ -84,6 +86,7 @@ async def test_capture_rearms_after_held_controls_and_disconnect(monkeypatch):
             for control in ("BUTTON_1", "DIAL_CW", "DIAL_CCW", "DIAL_CLICK")
             for kind in (EventType.KEY_PRESS, EventType.KEY_RELEASE)
         ]
+        assert physical_presses == ["BUTTON_1", "DIAL_CW", "DIAL_CCW", "DIAL_CLICK"]
         assert resets == ["input_changed", "input_changed"]
         assert source.state == "disconnected"
     finally:

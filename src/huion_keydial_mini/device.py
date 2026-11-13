@@ -42,9 +42,10 @@ class HuionKeydialMini:
                 on_state=self._on_state,
                 output_available=lambda: self.uinput_handler.available,
             )
-            self.evdev_source.on_observed_press = lambda action: self.event_bus.publish({
-                "type": "key_event", "action_id": action, "pressed": True,
-            })
+            if self.native_mode:
+                self.evdev_source.on_observed_press = lambda action: self.event_bus.publish({
+                    "type": "physical_press", "action_id": action, "pressed": True,
+                })
         else:
             from .evdev_source import EvdevSource
             from .uinput_handler import UInputHandler

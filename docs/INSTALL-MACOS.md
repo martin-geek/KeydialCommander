@@ -9,7 +9,7 @@ Requires an Apple Silicon Mac running macOS 14 or later and a Huion Keydial Mini
 
 The linked 1.3.1 installer uses your home Applications folder
 (`~/Applications`) and only detects the K20 over Bluetooth. The steps below
-describe Setup 1.3.3, which you can build using the instructions on this page.
+describe Setup 1.3.5, which you can build using the instructions on this page.
 
 1. Download the DMG above and double-click it in Finder.
 2. In the mounted disk image, double-click **Keydial Commander Setup**.
@@ -22,7 +22,7 @@ describe Setup 1.3.3, which you can build using the instructions on this page.
 
 ![Keydial Commander Setup and the Install button in the 1.3.1 release](screenshots/macos/setup.jpg)
 
-If you still have a copy in `~/Applications` after installing 1.3.3,
+If you still have a copy in `~/Applications` after installing 1.3.5,
 move the older copy to the Trash in Finder
 so macOS opens the new one. Your profiles and settings are kept.
 
@@ -75,11 +75,13 @@ copy. Refresh the entry for the installed app.
 
 ### macOS blocked exclusive keypad access
 
-This status means macOS refused to give Commander sole control of the keypad.
-If Commander shows **Identify only**, it can display the control you press,
-and the active app still receives the keypad’s factory input. Use an empty
-document to try Identify. Saved bindings run from the keypad only when
-Commander shows **Keydial Mini connected**.
+When Commander shows **Identify only** with a USB connection, click
+**Enable USB Remapping…** and confirm. This switches the K20 to tablet mode
+and lets Commander handle the controls. To restore factory shortcuts, quit
+Commander, unplug the USB cable, and turn the K20 off and back on.
+
+The pictured control flashes when you press it, even without a saved
+binding. **Identify** also selects the control for editing.
 
 ## How to use the app
 

@@ -17,6 +17,9 @@ async def run(token):
     loop.add_reader(stdin, done.set)
     for signum in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(signum, done.set)
+    if os.environ.pop("KEYDIAL_USB_TABLET_MODE", "") == "1":
+        from huion_keydial_mini import _macos
+        _macos.enable_usb_tablet()
     driver = HuionKeydialMini(Config.load(), native_token=token)
     try:
         await driver.start()

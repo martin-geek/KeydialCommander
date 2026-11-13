@@ -6,6 +6,7 @@
 #include <IOKit/hid/IOHIDKeys.h>
 #include <IOKit/hid/IOHIDUsageTables.h>
 #include <os/log.h>
+#import <IOUSBHost/IOUSBHost.h>
 
 #define CAPACITY 1024
 #define CLICK 19
@@ -13,7 +14,7 @@
 #define REQUIRED ((1u << WHEEL) - 1u)
 #define MODE CFSTR("KeydialCommanderHID")
 
-enum CaptureState { DISCONNECTED, CAPTURING, CAPTURE_FAILED, MISSING_INPUT, DEVICE_BUSY, EXCLUSIVE_DENIED, MONITORING };
+enum CaptureState { DISCONNECTED, CAPTURING, CAPTURE_FAILED, MISSING_INPUT, DEVICE_BUSY, EXCLUSIVE_DENIED, MONITORING, USB_TABLET_FAILED };
 
 typedef struct {
     int control;
@@ -30,6 +31,8 @@ static ControlEvent events[CAPACITY];
 static size_t event_count;
 static uint32_t held;
 static bool overflow;
+static bool usb_tablet_enabled;
+static uint8_t tablet_report_buffer[12];
 
 static int control_for_element(IOHIDElementRef element) {
     static const uint32_t button_usages[] = {
@@ -57,14 +60,7 @@ static int control_for_element(IOHIDElementRef element) {
     return 0;
 }
 
-static void on_value(void *context, IOReturn result, void *sender, IOHIDValueRef value) {
-    if (result != kIOReturnSuccess) {
-        overflow = true;
-        return;
-    }
-    int control = control_for_element(IOHIDValueGetElement(value));
-    if (!control) return;
-    CFIndex raw = IOHIDValueGetIntegerValue(value);
+static void record_control(int control, CFIndex raw) {
     int direction_or_down = (raw > 0) - (raw < 0);
     if (control != WHEEL) {
         uint32_t bit = 1u << (control - 1);
@@ -79,6 +75,32 @@ static void on_value(void *context, IOReturn result, void *sender, IOHIDValueRef
         return;
     }
     events[event_count++] = (ControlEvent){control, direction_or_down};
+}
+
+static void on_value(void *context, IOReturn result, void *sender, IOHIDValueRef value) {
+    if (result != kIOReturnSuccess) {
+        overflow = true;
+        return;
+    }
+    int control = control_for_element(IOHIDValueGetElement(value));
+    if (control) record_control(control, IOHIDValueGetIntegerValue(value));
+}
+
+static void on_tablet_report(void *context, IOReturn result, void *sender, IOHIDReportType type,
+                             uint32_t id, uint8_t *bytes, CFIndex length) {
+    if (result != kIOReturnSuccess) {
+        overflow = true;
+        return;
+    }
+    if (id != 8 || length != sizeof(tablet_report_buffer) || bytes[0] != 8) return;
+    if (bytes[1] == 0xf1) {
+        // The tablet uses 1 and 2 for the two directions, rather than a signed byte.
+        if (bytes[5] == 1 || bytes[5] == 2) record_control(WHEEL, bytes[5] == 1 ? -1 : 1);
+    } else if (bytes[1] == 0xe0) {
+        uint32_t buttons = bytes[4] | ((uint32_t)bytes[5] << 8) | ((uint32_t)bytes[6] << 16);
+        for (int control = 1; control <= CLICK; control++)
+            record_control(control, (buttons >> (control - 1)) & 1u);
+    }
 }
 
 static void release_device(const void *value, void *context) {
@@ -178,6 +200,75 @@ static void grab_device(const void *value, void *context) {
     CFRelease(elements);
 }
 
+// USB K20 firmware offers tablet reports on its vendor interface. The mode
+// lasts until the keypad is power-cycled. Never send the request to other devices.
+static bool start_usb_tablet(CFSetRef devices) {
+    IOHIDDeviceRef hid = NULL;
+    int location = 0;
+    CFIndex count = CFSetGetCount(devices);
+    const void *entries[count];
+    CFSetGetValues(devices, entries);
+    for (CFIndex i = 0; i < count; i++) {
+        IOHIDDeviceRef candidate = (IOHIDDeviceRef)entries[i];
+        if (!IOHIDDeviceConformsTo(candidate, 0xff00, 1)) continue;
+        const char *transport = device_transport(candidate);
+        if (!transport || strcmp(transport, "usb")) continue;
+        if (hid) return false;
+        CFTypeRef property = IOHIDDeviceGetProperty(candidate, CFSTR(kIOHIDLocationIDKey));
+        if (!property || CFGetTypeID(property) != CFNumberGetTypeID() ||
+            !CFNumberGetValue(property, kCFNumberIntType, &location)) return false;
+        hid = candidate;
+    }
+    if (!hid || IOHIDDeviceOpen(hid, kIOHIDOptionsTypeNone) != kIOReturnSuccess) return false;
+    CFSetAddValue(grabbed, hid);
+    IOHIDDeviceRegisterInputReportCallback(hid, tablet_report_buffer, sizeof(tablet_report_buffer),
+                                           on_tablet_report, NULL);
+    IOHIDDeviceScheduleWithRunLoop(hid, CFRunLoopGetCurrent(), MODE);
+
+    bool switched = false;
+    @autoreleasepool {
+        NSMutableDictionary *matching = [(NSDictionary *)IOServiceMatching("IOUSBHostDevice") autorelease];
+        matching[@"idVendor"] = @0x256c;
+        matching[@"idProduct"] = @0x0069;
+        matching[@"locationID"] = @(location);
+        io_service_t service = IOServiceGetMatchingService(kIOMainPortDefault,
+                                                           (CFDictionaryRef)[matching retain]);
+        if (service) {
+            dispatch_queue_t queue = dispatch_queue_create("keydial.usb", DISPATCH_QUEUE_SERIAL);
+            IOUSBHostDevice *usb = [[IOUSBHostDevice alloc] initWithIOService:service
+                options:IOUSBHostObjectInitOptionsNone queue:queue error:NULL interestHandler:nil];
+            IOObjectRelease(service);
+            if (usb) {
+                NSMutableData *data = [NSMutableData dataWithLength:255];
+                IOUSBDeviceRequest request = {.bmRequestType = 0x80, .bRequest = 6,
+                    .wValue = 0x0300 | 201, .wIndex = 0x0409, .wLength = 255};
+                NSUInteger received = 0;
+                if ([usb sendDeviceRequest:request data:data bytesTransferred:&received
+                         completionTimeout:0.1 error:NULL] && received >= 2 &&
+                    received <= data.length && (received % 2) == 0) {
+                    NSString *firmware = [[[NSString alloc] initWithBytes:(const uint8_t *)data.bytes + 2
+                        length:received - 2 encoding:NSUTF16LittleEndianStringEncoding] autorelease];
+                    if ([firmware hasPrefix:@"HUION_T21h_"]) {
+                        request.wValue = 0x0300 | 200;
+                        switched = [usb sendDeviceRequest:request data:data bytesTransferred:&received
+                                         completionTimeout:0.1 error:NULL] && received == 20;
+                    }
+                }
+                [usb destroy];
+                [usb release];
+            }
+            dispatch_release(queue);
+        }
+    }
+    if (!switched) release_devices();
+    return switched;
+}
+
+static PyObject *enable_usb_tablet(PyObject *self, PyObject *args) {
+    usb_tablet_enabled = true;
+    Py_RETURN_NONE;
+}
+
 static CFDictionaryRef match_product(int product) {
     int vendor = 0x256C;
     const void *keys[] = {CFSTR(kIOHIDVendorIDKey), CFSTR(kIOHIDProductIDKey)};
@@ -247,11 +338,19 @@ static PyObject *poll_capture(PyObject *self, PyObject *args) {
         release_devices();
         capture_options = kIOHIDOptionsTypeSeizeDevice;
         CaptureSetup setup = {0};
-        if (devices) {
-            CFSetApplyFunction(devices, check_usb, &setup.prefer_usb);
+        if (devices) CFSetApplyFunction(devices, check_usb, &setup.prefer_usb);
+        bool tablet = false;
+        if (setup.prefer_usb && usb_tablet_enabled) {
+            capture_options = kIOHIDOptionsTypeNone;
+            tablet = start_usb_tablet(devices);
+            // The mode may already have changed even when its reply is invalid.
+            // Keep remapping disabled until a verified tablet-mode session opens.
+            if (!tablet) setup.error = USB_TABLET_FAILED;
+            else setup.controls = REQUIRED;
+        } else if (devices) {
             CFSetApplyFunction(devices, grab_device, &setup);
         }
-        bool monitoring = setup.error == EXCLUSIVE_DENIED;
+        bool monitoring = setup.error == EXCLUSIVE_DENIED && !(setup.prefer_usb && usb_tablet_enabled);
         if (monitoring) {
             release_devices();
             capture_options = kIOHIDOptionsTypeNone;
@@ -403,6 +502,7 @@ static PyObject *post_key(PyObject *self, PyObject *args) {
 }
 
 static PyMethodDef methods[] = {
+    {"enable_usb_tablet", enable_usb_tablet, METH_NOARGS, NULL},
     {"start_capture", start_capture, METH_NOARGS, NULL},
     {"stop_capture", stop_capture, METH_NOARGS, NULL},
     {"poll_capture", poll_capture, METH_NOARGS, NULL},

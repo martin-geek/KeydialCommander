@@ -10,7 +10,7 @@ if sys.platform == "darwin":
         ["src/huion_keydial_mini/_macos.m"],
         extra_link_args=[
             "-framework", "IOKit", "-framework", "CoreFoundation",
-            "-framework", "CoreGraphics", "-framework", "AppKit",
+            "-framework", "IOUSBHost", "-framework", "CoreGraphics", "-framework", "AppKit",
         ],
     ))
 

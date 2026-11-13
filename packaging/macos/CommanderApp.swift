@@ -127,6 +127,10 @@ struct CommanderWindow: View {
                 Text(statusText).font(.callout)
                 Spacer()
                 DeviceIndicators(model: model)
+                if model.status?.device.transport == "usb",
+                   ["monitoring", "exclusive_denied", "usb_tablet_failed"].contains(model.status?.device.state ?? "") {
+                    Button("Enable USB Remapping…") { model.confirmUSBRemapping = true }
+                }
                 if model.status?.output.available == false || model.status?.device.state == "input_permission_required" {
                     Button("Permissions…") { model.showPermissionSetup = true }
                 }
@@ -137,6 +141,12 @@ struct CommanderWindow: View {
             .padding(.horizontal, 14).padding(.vertical, 8)
         }
         .preferredColorScheme(preferences.appearance.colorScheme)
+        .confirmationDialog("Enable USB remapping?", isPresented: $model.confirmUSBRemapping, titleVisibility: .visible) {
+            Button("Enable USB Remapping") { model.enableUSBRemapping() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Commander switches the wired K20 to tablet mode. To restore its factory shortcuts after quitting Commander, unplug the USB cable and turn the K20 off and back on.")
+        }
         .sheet(isPresented: $model.showPermissionSetup) {
             PermissionSetupView()
         }
@@ -157,6 +167,7 @@ struct CommanderWindow: View {
         case "recovering": return "Recovering keypad input…"
         case "missing_input": return "Waiting for all keypad controls"
         case "monitoring": return "Identify only · macOS blocked exclusive keypad access"
+        case "usb_tablet_failed": return "Couldn’t start USB remapping. Power-cycle the K20 to retry."
         case "exclusive_denied": return "macOS blocked exclusive keypad access. Remapping is unavailable."
         case "device_busy": return "Keypad in use by another app. Quit it and reconnect the keypad."
         case "capture_failed": return "Commander couldn’t read keypad input. Reconnect the keypad to retry."
@@ -296,7 +307,7 @@ struct DeviceBoard: View {
     private func tile(_ control: Control, width: CGFloat, height: CGFloat) -> some View {
         let action = model.bindings[control.id]
         let selected = !readOnly && model.selection == control.id
-        let highlighted = model.highlighted?.split(separator: "+").contains(Substring(control.id)) == true
+        let highlighted = model.highlighted == control.id
         let corner: CGFloat = control.dialCenter ? min(width, height) / 2 : 9
         let title = action?.title ?? ""
         let face = VStack(spacing: 3) {

@@ -107,6 +107,7 @@ final class CommanderModel: ObservableObject {
     @Published var identify = false
     @Published var error: String?
     @Published var showPermissionSetup = false
+    @Published var confirmUSBRemapping = false
     @Published private(set) var starting = false
     @Published private(set) var busy = false
     @Published private(set) var bluetoothBattery: Int?
@@ -118,6 +119,13 @@ final class CommanderModel: ObservableObject {
     private var externalApplication: String?
     private var pendingProfileCheck = false
     private var checkedLaunchPermissions = false
+    private var usbTabletMode = false
+
+    func enableUSBRemapping() {
+        usbTabletMode = true
+        stop()
+        start()
+    }
 
     private var process: Process?
     private var input: Pipe?
@@ -187,7 +195,7 @@ final class CommanderModel: ObservableObject {
         process.executableURL = Bundle.main.bundleURL
             .appendingPathComponent("Contents/Resources/keydial-engine/keydial-engine")
         process.environment = ProcessInfo.processInfo.environment.merging(
-            ["KEYDIAL_NATIVE_TOKEN": token], uniquingKeysWith: { _, value in value })
+            ["KEYDIAL_NATIVE_TOKEN": token, "KEYDIAL_USB_TABLET_MODE": usbTabletMode ? "1" : "0"], uniquingKeysWith: { _, value in value })
         process.standardInput = input
         process.standardOutput = output
         process.terminationHandler = { [weak self] ended in
@@ -262,6 +270,8 @@ final class CommanderModel: ObservableObject {
         port = nil
         starting = false
         status = nil
+        flashTask?.cancel()
+        highlighted = nil
         batteryReader.update(product: nil)
         loadedProfile = nil
         revision += 1
@@ -335,12 +345,12 @@ final class CommanderModel: ObservableObject {
                           let event = try? JSONDecoder().decode(Event.self, from: Data(text.utf8))
                     else { continue }
                     if event.type == "settings_preview" { showPreview?() }
-                    if event.type == "key_event", event.pressed == true, let id = event.action_id {
+                    if event.type == "physical_press", let id = event.action_id {
                         highlighted = id
                         if identify { selection = id; identify = false }
                         flashTask?.cancel()
                         flashTask = Task {
-                            try? await Task.sleep(nanoseconds: 220_000_000)
+                            try? await Task.sleep(nanoseconds: 360_000_000)
                             if !Task.isCancelled { highlighted = nil }
                         }
                     }

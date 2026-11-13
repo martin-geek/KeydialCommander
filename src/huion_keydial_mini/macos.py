@@ -54,7 +54,7 @@ class MacInputSource:
     """Track one exclusively seized K20 session and rearm after invalidation."""
 
     STATES = ("disconnected", "ready", "capture_failed", "missing_input", "device_busy",
-              "exclusive_denied", "monitoring")
+              "exclusive_denied", "monitoring", "usb_tablet_failed")
 
     def __init__(self, on_event, translator, on_state, output_available):
         self.on_event = on_event
@@ -185,18 +185,18 @@ class MacInputSource:
                     self._held |= bit
                 else:
                     self._held &= ~bit
+            if (self.ready or self.state == "monitoring") and value and self.on_observed_press:
+                if control == 20:
+                    action = "DIAL_CW" if value < 0 else "DIAL_CCW"
+                else:
+                    action = "DIAL_CLICK" if control == 19 else f"BUTTON_{control}"
+                self.on_observed_press(action)
             if self.ready:
                 for event in self._translate(control, value):
                     if epoch != self._epoch:
                         break
                     await self.on_event(event)
             else:
-                if self.state == "monitoring" and value and self.on_observed_press:
-                    if control == 20:
-                        action = "DIAL_CW" if value < 0 else "DIAL_CCW"
-                    else:
-                        action = "DIAL_CLICK" if control == 19 else f"BUTTON_{control}"
-                    self.on_observed_press(action)
                 self._update_state()
 
         if epoch != self._epoch and self._capturing:

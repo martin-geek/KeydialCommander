@@ -3,6 +3,14 @@
 `VERSION` sets the Finder, Setup, menu bar, and disk image version. Update it
 and add an entry here for each macOS release.
 
+## 1.3.5
+
+- Adds an opt-in USB tablet mode for the K20, so wired remapping can work
+  when macOS denies exclusive keyboard access. Power-cycle the K20 to restore
+  its factory shortcuts.
+- Highlights each physical press on the keypad picture, including controls
+  with no shortcut assigned.
+
 ## 1.3.4
 
 - Distinguishes macOS denying exclusive keypad access from a connection or
