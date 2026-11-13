@@ -102,7 +102,7 @@ struct CommanderWindow: View {
                             Label(model.identify ? "Press a control…" : "Identify", systemImage: "scope")
                         }
                         .toggleStyle(.button)
-                        .disabled(model.status?.device.ready != true)
+                        .disabled(model.status?.device.canIdentify != true)
                     }
                     DeviceBoard(model: model, orientation: preferences.orientation)
                 }
@@ -156,6 +156,8 @@ struct CommanderWindow: View {
         case "release_controls": return "Release the keypad controls to resume"
         case "recovering": return "Recovering keypad input…"
         case "missing_input": return "Waiting for all keypad controls"
+        case "monitoring": return "Identify only · macOS blocked exclusive keypad access"
+        case "exclusive_denied": return "macOS blocked exclusive keypad access. Remapping is unavailable."
         case "device_busy": return "Keypad in use by another app. Quit it and reconnect the keypad."
         case "capture_failed": return "Commander couldn’t read keypad input. Reconnect the keypad to retry."
         default: return "Keydial Mini not connected"

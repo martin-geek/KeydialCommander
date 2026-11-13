@@ -125,7 +125,7 @@ struct CommanderMenu: View {
                 model.identify.toggle()
                 if model.identify { open("commander") }
             }
-            .disabled(model.status?.device.ready != true)
+            .disabled(model.status?.device.canIdentify != true)
             Divider()
             Picker("Profile", selection: Binding(
                 get: { model.activeProfile ?? "" }, set: { model.activate($0) })) {

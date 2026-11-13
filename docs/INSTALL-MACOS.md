@@ -73,6 +73,14 @@ copy. Refresh the entry for the installed app.
    Monitoring** while its switch is already on, repeat the removal and
    re-add steps in **Input Monitoring**, then quit and reopen Commander.
 
+### macOS blocked exclusive keypad access
+
+This status means macOS refused to give Commander sole control of the keypad.
+If Commander shows **Identify only**, it can display the control you press,
+and the active app still receives the keypad’s factory input. Use an empty
+document to try Identify. Saved bindings run from the keypad only when
+Commander shows **Keydial Mini connected**.
+
 ## How to use the app
 
 ### Assign your first shortcut

@@ -3,6 +3,13 @@
 `VERSION` sets the Finder, Setup, menu bar, and disk image version. Update it
 and add an entry here for each macOS release.
 
+## 1.3.4
+
+- Distinguishes macOS denying exclusive keypad access from a connection or
+  privacy settings problem. Falls back to Identify when macOS allows shared
+  reads. Remapping stays disabled in this mode because the factory inputs
+  still reach the active app.
+
 ## 1.3.3
 
 - Setup shows the installer version and the version in Applications. It

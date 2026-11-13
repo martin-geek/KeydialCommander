@@ -12,6 +12,8 @@ export function StatusStrip() {
     missing_input: 'Waiting for all K20 controls',
     input_permission_required: 'Allow Input Monitoring for the terminal running Commander',
     capture_failed: 'Cannot access K20 input',
+    monitoring: 'macOS blocked exclusive access; remapping is unavailable',
+    exclusive_denied: 'macOS blocked exclusive K20 access',
     device_busy: 'K20 is in use by another app',
     output_unavailable: isMac
       ? 'Output unavailable. Allow Accessibility for your terminal, then restart it.'

@@ -53,14 +53,15 @@ class MacKeyOutput(KeyOutput):
 class MacInputSource:
     """Track one exclusively seized K20 session and rearm after invalidation."""
 
-    STATES = ("disconnected", "ready", "capture_failed", "missing_input", "device_busy")
+    STATES = ("disconnected", "ready", "capture_failed", "missing_input", "device_busy",
+              "exclusive_denied", "monitoring")
 
     def __init__(self, on_event, translator, on_state, output_available):
         self.on_event = on_event
         self.translator = translator
         self.on_state = on_state
         self.output_available = output_available
-        self.on_reset = self.on_readiness = None
+        self.on_reset = self.on_readiness = self.on_observed_press = None
         self.recovery_complete = lambda: True
         self._connected = self._capturing = False
         self._task = None
@@ -74,7 +75,7 @@ class MacInputSource:
 
     @property
     def preview_allowed(self):
-        return self.ready or self.state in ("disconnected", "input_permission_required")
+        return self.ready or self.state in ("disconnected", "input_permission_required", "monitoring", "exclusive_denied")
 
     async def start(self):
         self._suspended = None
@@ -110,7 +111,7 @@ class MacInputSource:
         self._update_state()
 
     def _update_state(self):
-        connected = self._capture_state in ("ready", "missing_input")
+        connected = self._capture_state in ("ready", "missing_input", "monitoring")
         state = self._suspended or self._capture_state
         if state == "ready":
             if not self.recovery_complete():
@@ -190,6 +191,12 @@ class MacInputSource:
                         break
                     await self.on_event(event)
             else:
+                if self.state == "monitoring" and value and self.on_observed_press:
+                    if control == 20:
+                        action = "DIAL_CW" if value < 0 else "DIAL_CCW"
+                    else:
+                        action = "DIAL_CLICK" if control == 19 else f"BUTTON_{control}"
+                    self.on_observed_press(action)
                 self._update_state()
 
         if epoch != self._epoch and self._capturing:

@@ -13,7 +13,7 @@
 #define REQUIRED ((1u << WHEEL) - 1u)
 #define MODE CFSTR("KeydialCommanderHID")
 
-enum CaptureState { DISCONNECTED, CAPTURING, CAPTURE_FAILED, MISSING_INPUT, DEVICE_BUSY };
+enum CaptureState { DISCONNECTED, CAPTURING, CAPTURE_FAILED, MISSING_INPUT, DEVICE_BUSY, EXCLUSIVE_DENIED, MONITORING };
 
 typedef struct {
     int control;
@@ -24,6 +24,7 @@ static IOHIDManagerRef manager;
 static CFSetRef detected;
 static CFMutableSetRef grabbed;
 static CFAbsoluteTime retry_after;
+static IOOptionBits capture_options;
 static enum CaptureState state;
 static ControlEvent events[CAPACITY];
 static size_t event_count;
@@ -83,7 +84,7 @@ static void on_value(void *context, IOReturn result, void *sender, IOHIDValueRef
 static void release_device(const void *value, void *context) {
     IOHIDDeviceRef device = (IOHIDDeviceRef)value;
     IOHIDDeviceUnscheduleFromRunLoop(device, CFRunLoopGetCurrent(), MODE);
-    IOHIDDeviceClose(device, kIOHIDOptionsTypeSeizeDevice);
+    IOHIDDeviceClose(device, capture_options);
 }
 
 static void release_devices(void) {
@@ -144,10 +145,13 @@ static void grab_device(const void *value, void *context) {
             setup->error = CAPTURE_FAILED;
             os_log_error(OS_LOG_DEFAULT, "K20 HID interfaces overlap or report different locations (existing=%{public}x, new=%{public}x)", setup->controls, controls);
         } else {
-            IOReturn result = IOHIDDeviceOpen(device, kIOHIDOptionsTypeSeizeDevice);
+            IOReturn result = IOHIDDeviceOpen(device, capture_options);
             if (result != kIOReturnSuccess) {
                 setup->error = result == kIOReturnExclusiveAccess ? DEVICE_BUSY : CAPTURE_FAILED;
-                os_log_error(OS_LOG_DEFAULT, "K20 HID exclusive open returned %{public}08x", result);
+                if (capture_options == kIOHIDOptionsTypeSeizeDevice && result == kIOReturnNotPrivileged)
+                    setup->error = EXCLUSIVE_DENIED;
+                os_log_error(OS_LOG_DEFAULT, "K20 HID open with options %{public}x returned %{public}08x",
+                             capture_options, result);
                 CFRelease(elements);
                 return;
             }
@@ -236,20 +240,30 @@ static PyObject *poll_capture(PyObject *self, PyObject *args) {
     CFSetRef devices = IOHIDManagerCopyDevices(manager);
     bool changed = devices != detected &&
                    (!devices || !detected || !CFEqual(devices, detected));
-    bool retry = (state == CAPTURE_FAILED || state == MISSING_INPUT || state == DEVICE_BUSY)
+    bool retry = (state == CAPTURE_FAILED || state == MISSING_INPUT ||
+                  state == DEVICE_BUSY || state == EXCLUSIVE_DENIED)
                  && CFAbsoluteTimeGetCurrent() >= retry_after;
     if (changed || retry) {
         release_devices();
+        capture_options = kIOHIDOptionsTypeSeizeDevice;
         CaptureSetup setup = {0};
         if (devices) {
             CFSetApplyFunction(devices, check_usb, &setup.prefer_usb);
             CFSetApplyFunction(devices, grab_device, &setup);
         }
-        if (setup.error) state = setup.error;
+        bool monitoring = setup.error == EXCLUSIVE_DENIED;
+        if (monitoring) {
+            release_devices();
+            capture_options = kIOHIDOptionsTypeNone;
+            setup = (CaptureSetup){.prefer_usb = setup.prefer_usb};
+            CFSetApplyFunction(devices, grab_device, &setup);
+        }
+        if (monitoring && (setup.error || setup.controls != REQUIRED)) state = EXCLUSIVE_DENIED;
+        else if (setup.error) state = setup.error;
         else if (!devices || !CFSetGetCount(devices)) state = DISCONNECTED;
         else if (setup.controls != REQUIRED) state = MISSING_INPUT;
-        else state = CAPTURING;
-        if (state != CAPTURING) release_devices();
+        else state = monitoring ? MONITORING : CAPTURING;
+        if (state != CAPTURING && state != MONITORING) release_devices();
         retry_after = CFAbsoluteTimeGetCurrent() + 2.0;
     }
     if (detected) CFRelease(detected);

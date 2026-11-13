@@ -64,6 +64,7 @@ struct Status: Decodable {
         let product: String?
         let battery: Int?
         let charging: Bool?
+        var canIdentify: Bool { ready || state == "monitoring" }
     }
     struct Output: Decodable { let available: Bool }
     let device: Device

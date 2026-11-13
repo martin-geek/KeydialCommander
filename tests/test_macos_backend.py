@@ -160,3 +160,43 @@ async def test_native_mode_requires_token_and_keeps_control_ids(monkeypatch, tmp
                 assert (await asyncio.wait_for(socket.receive_json(), timeout=2))["action_id"] == "BUTTON_2"
     finally:
         await driver.stop()
+
+
+async def test_shared_capture_identifies_without_executing_bindings(monkeypatch):
+    from huion_keydial_mini import _macos
+    from huion_keydial_mini.input_translator import InputTranslator
+    from huion_keydial_mini.macos import MacInputSource
+
+    observed = []
+    dispatched = []
+
+    async def dispatch(event):
+        dispatched.append(event)
+
+    source = MacInputSource(dispatch, InputTranslator(), lambda connected: None, lambda: True)
+    batches = iter([
+        (6, True, 0, []),
+        (6, False, 0, [(1, 1), (1, 0), (20, -1), (19, 1), (19, 0)]),
+    ])
+    monkeypatch.setattr(_macos, "can_listen", lambda: True)
+    monkeypatch.setattr(_macos, "start_capture", lambda: True)
+    monkeypatch.setattr(_macos, "poll_capture", lambda: next(batches, (6, False, 0, [])))
+    monkeypatch.setattr(_macos, "stop_capture", lambda: None)
+    reported = asyncio.Event()
+
+    def observe(action):
+        observed.append(action)
+        if action == "DIAL_CLICK":
+            reported.set()
+
+    source.on_observed_press = observe
+
+    await source.start()
+    try:
+        await asyncio.wait_for(reported.wait(), timeout=2)
+        assert source.state == "monitoring"
+        assert not source.ready
+        assert observed == ["BUTTON_1", "DIAL_CW", "DIAL_CLICK"]
+        assert not dispatched
+    finally:
+        await source.stop()
